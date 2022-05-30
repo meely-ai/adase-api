@@ -1,8 +1,8 @@
 notebooks/
+.ipynb_checkpoints/
 #*.txt
 #*.md
 data/
-2022-01-19_12
 #notebooks/
 **/.terraform
 # Byte-compiled / optimized / DLL files

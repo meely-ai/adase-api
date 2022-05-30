@@ -5,6 +5,9 @@ Alpha Data Analytics ("ADA") is a data analytics company, flagman product is Alt
 ADA vision is to democratise advanced AI-system supporting business decisions, that benefit data proficient people and small- or medium- quantitative companies. 
 <br><br>
 ADASE supports `keyword` and `topic` engines, details below
+```commandline
+pip install adase-api
+```
 ## Keyword search engine
 ### Query syntax
 - Each condition is placed inside of round brackets `()`, where
