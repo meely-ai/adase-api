@@ -80,8 +80,15 @@ date_time           source
                     media         0.002950   6.125000 -0.057586    0.001922   5.523810 -0.028692
                     social        0.007991  50.202381  0.025980    0.003767  29.363095  0.019497
 ```
+it's visible data feed comes detailed per source type: 
+- `media` indicates newspapers, TV, radio and other mass media
+- `social` includes social platforms and blogs
+- `corp` covers corporate communication as company newsrooms and regulatory filings
+- `avg` is a weighted average of all
 ### In case you don't have yet the credentials, you can [sign up for free](https://adalytica.io/signup)
 - Data available since January 1, 2006
 - Easy way to explore or backtest
 - In a trial version data lags 24-hours
 - Probably something else? Hopefully this data could inspire for some innovative solutions to your problem
+
+You can follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/) 
