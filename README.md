@@ -28,13 +28,13 @@ os.environ['ADA_API_PASSWORD'] = "p@ssw0rd"
 ```python
 from adase_api import query
 
-q = "(+Bitcoin) OR (+ETH), (+crypto)"
+q = "(+Bitcoin -Luna) OR (+ETH), (+crypto)"
 df = query.Explorer.get(q, process_count=1, engine='keyword', start_date='2022-01-01', end_date='2022-05-29')
 df.unstack(2).tail()
 ```
 Returns coverage, hits, score and score_coverage to a pandas dataframe
 ```text
-query                      (+Bitcoin) OR (+ETH)                      (+crypto)                     
+query                      (+Bitcoin -Luna) OR (+ETH)                      (+crypto)                     
                                        coverage       hits     score  coverage       hits     score
 date_time           source                                                                         
 2022-05-27 11:00:00 all                0.026520  36.676056  0.218439  0.055207  76.487535  0.267412
