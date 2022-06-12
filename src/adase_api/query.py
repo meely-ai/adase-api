@@ -45,7 +45,16 @@ class Explorer:
             end_date = quote_url(pd.to_datetime(end_date).isoformat())
 
         query = quote_url(query)
-        url_request = f"{AdaApiConfig.HOST}:{AdaApiConfig.PORT}/{engine}/{query}&token={token}"\
+        if engine == 'keyword':
+            host = AdaApiConfig.HOST_KEYWORD
+            api_path = engine
+        elif engine == 'topic':
+            host = AdaApiConfig.HOST_TOPIC
+            api_path = f"{engine}/{engine}"
+        else:
+            raise NotImplemented(f"engine={engine} not supported")
+
+        url_request = f"{host}:{AdaApiConfig.PORT}/{api_path}/{query}&token={token}"\
                       f"?freq={freq}&rolling={rolling}&indicators={indicators}&return_top={top_hits}"
         if start_date is not None:
             url_request += f'&start_date={start_date}'
@@ -60,7 +69,7 @@ class Explorer:
 
     @staticmethod
     def get(topics, engine='topic', process_count=2, indicators=True,
-            start_date=None, end_date=None, freq='-3h'):
+            start_date=None, end_date=None, freq='-1h'):
         def process_query(q_topic):
             topics_frame = Explorer.query_endpoint(auth['access_token'], q_topic,
                                                    engine=engine, freq=freq, indicators=indicators,
