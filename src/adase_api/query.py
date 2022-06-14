@@ -4,7 +4,7 @@ from functools import reduce
 from urllib.parse import quote as quote_url
 import pandas as pd
 from functools import partial
-from multiprocessing import Pool
+from billiard import Pool
 from adase_api.docs.config import AdaApiConfig
 
 
