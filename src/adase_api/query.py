@@ -30,6 +30,14 @@ def apply_multiprocess(f, jobs, workers=1, **kwargs):
             return list(pool.imap(partial(f, **kwargs), jobs))
 
 
+def process_query(q_topic, auth=None, engine=None, freq=None,
+                  roll_period=None, start_date=None, end_date=None, *args, **kwargs):
+    topics_frame = Explorer.query_endpoint(auth['access_token'], q_topic,
+                                           engine=engine, freq=freq, roll_period=roll_period,
+                                           start_date=start_date, end_date=end_date)
+    return topics_frame.unstack(1)
+
+
 class Explorer:
     @staticmethod
     def auth(username, password):
@@ -91,13 +99,10 @@ class Explorer:
         :param end_date: str
         :return: pd.DataFrame
         """
-        def process_query(q_topic):
-            topics_frame = Explorer.query_endpoint(auth['access_token'], q_topic,
-                                                   engine=engine, freq=freq, roll_period=roll_period,
-                                                   start_date=start_date, end_date=end_date)
-            return topics_frame.unstack(1)
 
         auth = Explorer.auth(AdaApiConfig.USERNAME, AdaApiConfig.PASSWORD)
-        frames = apply_multiprocess(process_query, query.split(','), workers=process_count)
+        frames = apply_multiprocess(process_query, query.split(','), workers=process_count,
+                                    auth=auth, engine=engine, freq=freq, roll_period=roll_period,
+                                    start_date=start_date, end_date=end_date)
 
         return reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
