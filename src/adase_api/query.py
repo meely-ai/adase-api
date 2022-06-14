@@ -1,5 +1,5 @@
 import uuid, requests
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import reduce
 from urllib.parse import quote as quote_url
 import pandas as pd
@@ -37,8 +37,8 @@ class Explorer:
 
     @staticmethod
     def query_endpoint(token, query, engine='keyword', freq='-3h',
-                       start_date=None, end_date=None, rolling='true',
-                       indicators=True, top_hits=100):
+                       start_date=None, end_date=None,
+                       roll_period='7d', top_hits=100):
         if start_date is not None:
             start_date = quote_url(pd.to_datetime(start_date).isoformat())
         if end_date is not None:
@@ -55,28 +55,49 @@ class Explorer:
             raise NotImplemented(f"engine={engine} not supported")
 
         url_request = f"{host}:{AdaApiConfig.PORT}/{api_path}/{query}&token={token}"\
-                      f"?freq={freq}&rolling={rolling}&indicators={indicators}&return_top={top_hits}"
+                      f"?freq={freq}&roll_period={roll_period}&&return_top={top_hits}"
         if start_date is not None:
             url_request += f'&start_date={start_date}'
             if end_date is not None:
                 url_request += f'&end_date={end_date}'
 
         response = requests.get(url_request)
+        if response.status_code in range(400, 500):
+            raise AttributeError(f"API server error {response.status_code} | {response.json()}")
+
         topics_frame = pd.DataFrame(response.json()['data'])
         topics_frame.date_time = pd.DatetimeIndex(topics_frame.date_time.apply(
             lambda dt: datetime.strptime(dt, "%Y%m%d%H")))
         return topics_frame.set_index(['date_time', 'query', 'source'])
 
     @staticmethod
-    def get(topics, engine='topic', process_count=2, indicators=True,
-            start_date=None, end_date=None, freq='-1h'):
+    def get(query, engine='topic', process_count=2, freq='-1h', roll_period='7d',
+            start_date=None, end_date=None):
+        """
+        Query ADASE API to a frame
+        :param query: str, syntax varies by engine
+            engine='keyword':
+                `(+Bitcoin -Luna) OR (+ETH), (+crypto)`
+            engine='topic':
+                `inflation rates, OPEC cartel`
+        :param engine: str,
+            `keyword`: boolean operators, more https://solr.apache.org/guide/6_6/the-standard-query-parser.html
+            `topic`: plain text, works best with 2-4 words
+        :param process_count: int, parallel workers
+        :param freq: str, https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
+        :param roll_period: str, supported
+            `7d`, `28d`, `92d`, `365d`
+        :param start_date: str
+        :param end_date: str
+        :return: pd.DataFrame
+        """
         def process_query(q_topic):
             topics_frame = Explorer.query_endpoint(auth['access_token'], q_topic,
-                                                   engine=engine, freq=freq, indicators=indicators,
+                                                   engine=engine, freq=freq, roll_period=roll_period,
                                                    start_date=start_date, end_date=end_date)
             return topics_frame.unstack(1)
 
         auth = Explorer.auth(AdaApiConfig.USERNAME, AdaApiConfig.PASSWORD)
-        frames = apply_multiprocess(process_query, topics.split(','), workers=process_count)
+        frames = apply_multiprocess(process_query, query.split(','), workers=process_count)
 
         return reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
