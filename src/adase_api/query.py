@@ -1,24 +1,10 @@
-import uuid, requests, asyncio, aiohttp
+import requests, asyncio, aiohttp
 from asgiref import sync
 from datetime import datetime
 from functools import reduce
 from urllib.parse import quote as quote_url
 import pandas as pd
 from adase_api.docs.config import AdaApiConfig
-
-
-WORKER_ID = uuid.uuid4().hex[:6]
-
-
-def log(stack_inspect, msg, status, **kwargs):
-    dt = datetime.utcnow()
-    _time = str(dt)[11:-5]
-    try:
-        scope = stack_inspect[0][1].split('/')[-1]
-        method = stack_inspect[0][3]
-    except IndexError:
-        scope, method = '', ''
-    print(f"[{_time}]-[{scope}]-[{method}]-[{msg}]-[{status}]-[{WORKER_ID}]")
 
 
 def auth(username, password):
@@ -39,6 +25,13 @@ def async_aiohttp_get_all(urls):
             ])
     # call get_all as a sync function to be used in a sync context
     return sync.async_to_sync(get_all)(urls)
+
+
+def http_get_all(urls):
+    """
+    Sequential get requests
+    """
+    return [requests.get(url).json() for url in urls]
 
 
 def get_query_urls(token, query, engine='keyword', freq='-3h',
@@ -69,9 +62,10 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
 
 
 def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
-               start_date=None, end_date=None):
+               start_date=None, end_date=None, run_async=True):
     """
     Query ADASE API to a frame
+    :param run_async:
     :param queries:  str, syntax varies by engine
         engine='keyword':
             `(+Bitcoin -Luna) OR (+ETH), (+crypto)`
@@ -93,7 +87,13 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
                                         start_date=start_date, end_date=end_date,
                                         roll_period=roll_period)
                          for query in queries.split(',')])
-    for response in async_aiohttp_get_all(urls):
+
+    if run_async:
+        responses = async_aiohttp_get_all(urls)
+    else:
+        responses = http_get_all(urls)
+
+    for response in responses:
         frame = pd.DataFrame(response['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
             lambda dt: datetime.strptime(dt, "%Y%m%d%H")))

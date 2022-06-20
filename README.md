@@ -32,7 +32,7 @@ os.environ['ADA_API_PASSWORD'] = "p@ssw0rd"
 from adase_api import query
 
 q = "(+Bitcoin -Luna) OR (+ETH), (+crypto)"
-df = query.Explorer.get(q, process_count=1, engine='keyword', start_date='2022-01-01', end_date='2022-05-29')
+df = query.load_frame(q, engine='keyword', start_date='2022-01-01', end_date='2022-05-29')
 df.unstack(2).tail()
 ```
 Returns coverage, hits, score and score_coverage to a pandas dataframe
@@ -65,7 +65,7 @@ Since data is weekly seasonal, a 7-day rolling average is applied by default
 from adase_api import query
 
 q = "inflation rates, OPEC cartel"
-df = query.Explorer.get(q, process_count=1, engine='topic', start_date='2022-01-01')
+df = query.load_frame(q, engine='topic', start_date='2022-01-01')
 df.unstack(2).tail(10)
 ```
 ```text
