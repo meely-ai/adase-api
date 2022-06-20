@@ -1,10 +1,11 @@
 ![logo](ADA_logo.png)
-## ADA Sentiment Explorer API to pandas
+## ADA Sentiment Explorer API
 ### Introduction
-Alpha Data Analytics ("ADA") is a data analytics company, flagman product is Alternative Data Sentiment Explorer (“ADASE”), build on a sentiment monitoring technology that turns mentions from 2000+ news sources and social platforms into real-time machine-readable indicators. It is designed to provide an unbiased understanding of people opinions as a major driving force of capital markets, political processes, demand prediction or marketing.  
-ADA vision is to democratise advanced AI-system supporting business decisions, that benefit data proficient people and small- or medium- quantitative companies. 
-<br><br>
-ADASE supports `keyword` and `topic` engines, details below
+Alpha Data Analytics ("ADA") is a data analytics company, core product is ADA Sentiment Explorer (“ADASE”), build on an opinion monitoring technology that intelligently reads news sources and social platforms into machine-readable indicators. It is designed to provide unbiased visibility of people's opinions as a driving force of capital markets, political processes, demand prediction or marketing
+
+ADA's vision is to democratise advanced AI-system supporting decisions, that benefit data proficient people and small- or medium- quantitative institutions.<br><br>
+ADASE supports `keyword` and `topic` engines, as explained below
+### To install
 ```commandline
 pip install adase-api
 ```
