@@ -1,2 +1,4 @@
 pandas==1.1.5
-billiard==3.6.4.0
+asgiref==3.5.2
+aiohttp>=3.7
+asgiref>=3.5.2
