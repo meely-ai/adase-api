@@ -36,7 +36,12 @@ def http_get_all(urls):
 
 def get_query_urls(token, query, engine='keyword', freq='-3h',
                    start_date=None, end_date=None,
-                   roll_period='7d'):
+                   roll_period='7d',
+                   bband_period='21d',
+                   bband_std=2,
+                   ta_indicator='coverage',
+                   z_score=False):
+
     if start_date is not None:
         start_date = quote_url(pd.to_datetime(start_date).isoformat())
     if end_date is not None:
@@ -58,14 +63,25 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
         url_request += f'&start_date={start_date}'
         if end_date is not None:
             url_request += f'&end_date={end_date}'
+
+    if bband_period is not None:
+        url_request += f'&bband_period={bband_period}&bband_std={bband_std}&ta_indicator={ta_indicator}'
+
+    url_request += f'&z_score={z_score}'
     return url_request
 
 
 def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
-               start_date=None, end_date=None, run_async=True):
+               start_date=None, end_date=None, run_async=True,
+               bband_period=None, bband_std=2, ta_indicator='coverage', z_score=False):
     """
     Query ADASE API to a frame
-    :param run_async:
+    :param z_score: bool, data normalisation
+    :param ta_indicator: str, feature name to apply technical (chart) analysis
+    :param bband_period: str, supported
+        `7d`, `14d`, `28d`, `92d`, `365d`
+    :param bband_std: float, standard deviation
+    :param run_async: bool
     :param queries:  str, syntax varies by engine
         engine='keyword':
             `(+Bitcoin -Luna) OR (+ETH), (+crypto)`
@@ -84,8 +100,9 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     auth_resp = auth(AdaApiConfig.USERNAME, AdaApiConfig.PASSWORD)
     frames = []
     urls = filter(None, [get_query_urls(auth_resp['access_token'], query, engine=engine, freq=freq,
-                                        start_date=start_date, end_date=end_date,
-                                        roll_period=roll_period)
+                                        start_date=start_date, end_date=end_date, roll_period=roll_period,
+                                        bband_period=bband_period, bband_std=bband_std, z_score=z_score,
+                                        ta_indicator=ta_indicator)
                          for query in queries.split(',')])
 
     if run_async:
@@ -97,5 +114,6 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
         frame = pd.DataFrame(response['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
             lambda dt: datetime.strptime(dt, "%Y%m%d%H")))
+        print(frame)
         frames += [frame.set_index(['date_time', 'query', 'source']).unstack(1)]
     return reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
