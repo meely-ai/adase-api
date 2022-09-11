@@ -114,6 +114,5 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
         frame = pd.DataFrame(response['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
             lambda dt: datetime.strptime(dt, "%Y%m%d%H")))
-        print(frame)
         frames += [frame.set_index(['date_time', 'query', 'source']).unstack(1)]
     return reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
