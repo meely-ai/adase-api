@@ -1,1 +1,4 @@
 pandas==1.1.5
+asgiref==3.5.2
+aiohttp>=3.7
+asgiref>=3.5.2
