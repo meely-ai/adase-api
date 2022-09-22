@@ -54,6 +54,9 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
     elif engine == 'topic':
         host = AdaApiConfig.HOST_TOPIC
         api_path = f"{engine}/{engine}"
+    elif engine == 'news':
+        host = AdaApiConfig.HOST_TOPIC
+        api_path = f"topic/rank-news"
     else:
         raise NotImplemented(f"engine={engine} not supported")
 
@@ -98,21 +101,28 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     :return: pd.DataFrame
     """
     auth_resp = auth(AdaApiConfig.USERNAME, AdaApiConfig.PASSWORD)
+    queries_split = queries.split(',')
     frames = []
     urls = filter(None, [get_query_urls(auth_resp['access_token'], query, engine=engine, freq=freq,
                                         start_date=start_date, end_date=end_date, roll_period=roll_period,
                                         bband_period=bband_period, bband_std=bband_std, z_score=z_score,
                                         ta_indicator=ta_indicator)
-                         for query in queries.split(',')])
+                         for query in queries_split])
 
     if run_async:
         responses = async_aiohttp_get_all(urls)
     else:
         responses = http_get_all(urls)
 
-    for response in responses:
+    for query, response in zip(queries_split, responses):
         frame = pd.DataFrame(response['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
             lambda dt: datetime.strptime(dt, "%Y%m%d%H")))
-        frames += [frame.set_index(['date_time', 'query', 'source']).unstack(1)]
+        if 'query' not in frame.columns:
+            frames += [frame.assign(**{'query': query})]
+        else:
+            frames += [frame.set_index(['date_time', 'query', 'source']).unstack(1)]
+
+    if engine == 'news':
+        return pd.concat(frames)
     return reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
