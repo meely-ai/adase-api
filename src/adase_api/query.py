@@ -139,5 +139,16 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     if engine == 'news':
         return pd.concat(frames)
     resp = reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
+
     if normalise_data_split:
-        return adjust_data_change(resp)
+        lresp = []
+        for one_query in queries_split:
+            one_resp = pd.concat(
+                [adjust_data_change(g.T.stack(0).droplevel(0)).stack((0, 1))
+                 for s, g in resp[[one_query]].groupby('source')]).sort_index().to_frame("")
+            one_resp.columns = pd.MultiIndex.from_tuples([[one_query]], names=['query'])
+            lresp += [one_resp]
+
+        resp = reduce(lambda l, r: l.join(r, how='outer'), lresp)
+
+    return resp
