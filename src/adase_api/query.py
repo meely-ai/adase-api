@@ -1,9 +1,10 @@
 import requests, asyncio, aiohttp
 from asgiref import sync
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import reduce
 from urllib.parse import quote as quote_url
 import pandas as pd
+from scipy.stats import zscore
 from adase_api.docs.config import AdaApiConfig
 
 
@@ -19,7 +20,11 @@ def async_aiohttp_get_all(urls):
         async with aiohttp.ClientSession() as session:
             async def fetch(url):
                 async with session.get(url) as response:
-                    return await response.json()
+                    try:
+                        return await response.json()
+                    except Exception as exc:
+                        print(exc)
+                        return
             return await asyncio.gather(*[
                 fetch(url) for url in _urls
             ])
@@ -32,6 +37,12 @@ def http_get_all(urls):
     Sequential get requests
     """
     return [requests.get(url).json() for url in urls]
+
+
+def adjust_data_change(df, change_date=pd.to_datetime('2021-08-15'), overlap=timedelta(days=7)):
+    before, after = df.loc[(df.index < change_date - overlap)], df.loc[(df.index > change_date + overlap)]
+
+    return zscore(before).append(zscore(after)).clip(lower=-3, upper=3)
 
 
 def get_query_urls(token, query, engine='keyword', freq='-3h',
@@ -76,9 +87,11 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
 
 def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
                start_date=None, end_date=None, run_async=True,
-               bband_period=None, bband_std=2, ta_indicator='coverage', z_score=False):
+               bband_period=None, bband_std=2, ta_indicator='coverage', z_score=False,
+               normalise_data_split=True):
     """
     Query ADASE API to a frame
+    :param normalise_data_split:
     :param z_score: bool, data normalisation
     :param ta_indicator: str, feature name to apply technical (chart) analysis
     :param bband_period: str, supported
@@ -125,4 +138,6 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
 
     if engine == 'news':
         return pd.concat(frames)
-    return reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
+    resp = reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
+    if normalise_data_split:
+        return adjust_data_change(resp)
