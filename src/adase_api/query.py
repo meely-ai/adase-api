@@ -1,9 +1,10 @@
 import requests, asyncio, aiohttp
 from asgiref import sync
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import reduce
 from urllib.parse import quote as quote_url
 import pandas as pd
+from scipy.stats import zscore
 from adase_api.docs.config import AdaApiConfig
 
 
@@ -19,7 +20,11 @@ def async_aiohttp_get_all(urls):
         async with aiohttp.ClientSession() as session:
             async def fetch(url):
                 async with session.get(url) as response:
-                    return await response.json()
+                    try:
+                        return await response.json()
+                    except Exception as exc:
+                        print(exc)
+                        return
             return await asyncio.gather(*[
                 fetch(url) for url in _urls
             ])
@@ -32,6 +37,12 @@ def http_get_all(urls):
     Sequential get requests
     """
     return [requests.get(url).json() for url in urls]
+
+
+def adjust_data_change(df, change_date=pd.to_datetime('2021-08-15'), overlap=timedelta(days=7)):
+    before, after = df.loc[(df.index < change_date - overlap)], df.loc[(df.index > change_date + overlap)]
+
+    return zscore(before).append(zscore(after)).clip(lower=-3, upper=3)
 
 
 def get_query_urls(token, query, engine='keyword', freq='-3h',
@@ -54,6 +65,9 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
     elif engine == 'topic':
         host = AdaApiConfig.HOST_TOPIC
         api_path = f"{engine}/{engine}"
+    elif engine == 'news':
+        host = AdaApiConfig.HOST_TOPIC
+        api_path = f"topic/rank-news"
     else:
         raise NotImplemented(f"engine={engine} not supported")
 
@@ -73,9 +87,11 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
 
 def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
                start_date=None, end_date=None, run_async=True,
-               bband_period=None, bband_std=2, ta_indicator='coverage', z_score=False):
+               bband_period=None, bband_std=2, ta_indicator='coverage', z_score=False,
+               normalise_data_split=True):
     """
     Query ADASE API to a frame
+    :param normalise_data_split:
     :param z_score: bool, data normalisation
     :param ta_indicator: str, feature name to apply technical (chart) analysis
     :param bband_period: str, supported
@@ -98,21 +114,30 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     :return: pd.DataFrame
     """
     auth_resp = auth(AdaApiConfig.USERNAME, AdaApiConfig.PASSWORD)
+    queries_split = queries.split(',')
     frames = []
     urls = filter(None, [get_query_urls(auth_resp['access_token'], query, engine=engine, freq=freq,
                                         start_date=start_date, end_date=end_date, roll_period=roll_period,
                                         bband_period=bband_period, bband_std=bband_std, z_score=z_score,
                                         ta_indicator=ta_indicator)
-                         for query in queries.split(',')])
+                         for query in queries_split])
 
     if run_async:
         responses = async_aiohttp_get_all(urls)
     else:
         responses = http_get_all(urls)
 
-    for response in responses:
+    for query, response in zip(queries_split, responses):
         frame = pd.DataFrame(response['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
             lambda dt: datetime.strptime(dt, "%Y%m%d%H")))
-        frames += [frame.set_index(['date_time', 'query', 'source']).unstack(1)]
-    return reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
+        if 'query' not in frame.columns:
+            frames += [frame.assign(**{'query': query})]
+        else:
+            frames += [frame.set_index(['date_time', 'query', 'source']).unstack(1)]
+
+    if engine == 'news':
+        return pd.concat(frames)
+    resp = reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
+    if normalise_data_split:
+        return adjust_data_change(resp)
