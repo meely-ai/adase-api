@@ -41,7 +41,8 @@ def http_get_all(urls):
 
 def adjust_data_change(df, change_date=pd.to_datetime('2021-08-15'), overlap=timedelta(days=7)):
     before, after = df.loc[(df.index < change_date - overlap)], df.loc[(df.index > change_date + overlap)]
-
+    if len(before) == 0:
+        return df
     return zscore(before).append(zscore(after)).clip(lower=-3, upper=3)
 
 
@@ -140,7 +141,7 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
         return pd.concat(frames)
     resp = reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
 
-    if normalise_data_split:
+    if normalise_data_split and engine == 'topic':
         lresp = []
         for one_query in queries_split:
             one_resp = pd.concat(
