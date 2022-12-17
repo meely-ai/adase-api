@@ -131,7 +131,7 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     for query, response in zip(queries_split, responses):
         frame = pd.DataFrame(response['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
-            lambda dt: datetime.strptime(dt, "%Y%m%d%H")))
+            lambda dt: datetime.strptime(dt, "%Y%m%d" if len(dt) == 8 else "Y%m%d%H")))
         if 'query' not in frame.columns:
             frames += [frame.assign(**{'query': query})]
         else:
