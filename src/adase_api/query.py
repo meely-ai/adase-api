@@ -41,7 +41,8 @@ def http_get_all(urls):
 
 def adjust_data_change(df, change_date=pd.to_datetime('2021-08-15'), overlap=timedelta(days=7)):
     before, after = df.loc[(df.index < change_date - overlap)], df.loc[(df.index > change_date + overlap)]
-
+    if len(before) == 0:
+        return df
     return zscore(before).append(zscore(after)).clip(lower=-3, upper=3)
 
 
@@ -64,7 +65,7 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
         api_path = engine
     elif engine == 'topic':
         host = AdaApiConfig.HOST_TOPIC
-        api_path = f"{engine}/{engine}"
+        api_path = 'topic'
     elif engine == 'news':
         host = AdaApiConfig.HOST_TOPIC
         api_path = f"topic/rank-news"
@@ -130,14 +131,19 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     for query, response in zip(queries_split, responses):
         frame = pd.DataFrame(response['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
-            lambda dt: datetime.strptime(dt, "%Y%m%d%H")))
+            lambda dt: datetime.strptime(dt, "%Y%m%d" if len(dt) == 8 else "%Y%m%d%H")))
         if 'query' not in frame.columns:
             frames += [frame.assign(**{'query': query})]
         else:
-            frames += [frame.set_index(['date_time', 'query', 'source']).unstack(1)]
+            frame = frame.set_index(['date_time', 'query', 'source']).unstack(1)
+
+            if normalise_data_split and engine == 'topic':
+                frame = adjust_data_change(frame.unstack(1)).stack()
+            frames += [frame]
 
     if engine == 'news':
-        return pd.concat(frames)
+        return pd.concat(frames)  # assumed one topic (query) at a time
+
     resp = reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
-    if normalise_data_split:
-        return adjust_data_change(resp)
+
+    return resp
