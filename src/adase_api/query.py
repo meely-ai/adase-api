@@ -68,7 +68,7 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
         api_path = 'topic'
     elif engine == 'news':
         host = AdaApiConfig.HOST_TOPIC
-        api_path = f"topic/rank-news"
+        api_path = "rank-news"
     else:
         raise NotImplemented(f"engine={engine} not supported")
 
