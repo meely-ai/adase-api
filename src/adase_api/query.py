@@ -65,7 +65,7 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
         api_path = engine
     elif engine == 'topic':
         host = AdaApiConfig.HOST_TOPIC
-        api_path = f"{engine}/{engine}"
+        api_path = 'topic'
     elif engine == 'news':
         host = AdaApiConfig.HOST_TOPIC
         api_path = f"topic/rank-news"
