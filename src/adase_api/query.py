@@ -73,7 +73,7 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
         raise NotImplemented(f"engine={engine} not supported")
 
     url_request = f"{host}:{AdaApiConfig.PORT}/{api_path}/{query}&token={token}" \
-                  f"?freq={freq}&roll_period={roll_period}&"
+                  f"?freq={freq}&roll_period={roll_period}"
     if start_date is not None:
         url_request += f'&start_date={start_date}'
         if end_date is not None:
@@ -83,6 +83,7 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
         url_request += f'&bband_period={bband_period}&bband_std={bband_std}&ta_indicator={ta_indicator}'
 
     url_request += f'&z_score={z_score}'
+    print(url_request)
     return url_request
 
 
@@ -137,7 +138,7 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
         else:
             frame = frame.set_index(['date_time', 'query', 'source']).unstack(1)
 
-            if normalise_data_split and engine == 'topic':
+            if normalise_data_split and engine == 'topic' and z_score:
                 frame = adjust_data_change(frame.unstack(1)).stack()
             frames += [frame]
 
