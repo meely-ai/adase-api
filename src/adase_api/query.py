@@ -1,9 +1,11 @@
-import requests, asyncio, aiohttp
+import requests, asyncio, aiohttp, logging
 from asgiref import sync
 from datetime import datetime, timedelta
 from functools import reduce
 from urllib.parse import quote as quote_url
 import pandas as pd
+from requests.adapters import HTTPAdapter, Retry
+from aiohttp_retry import RetryClient
 from scipy.stats import zscore
 from adase_api.docs.config import AdaApiConfig
 
@@ -12,18 +14,19 @@ def auth(username, password):
     return requests.post(AdaApiConfig.AUTH_HOST, data={'username': username, 'password': password}).json()
 
 
-def async_aiohttp_get_all(urls):
+def async_aiohttp_get_all(urls, retry_attempts=3):
     """
     Performs asynchronous get requests
     """
     async def get_all(_urls):
         async with aiohttp.ClientSession() as session:
+            retry_session = RetryClient(session, retry_attempts=retry_attempts)
+
             async def fetch(url):
-                async with session.get(url) as response:
+                async with retry_session.get(url) as response:
                     try:
                         return await response.json()
                     except Exception as exc:
-                        print(exc)
                         return
             return await asyncio.gather(*[
                 fetch(url) for url in _urls
@@ -32,11 +35,26 @@ def async_aiohttp_get_all(urls):
     return sync.async_to_sync(get_all)(urls)
 
 
-def http_get_all(urls):
+def http_get_all(urls, **kwargs):
     """
     Sequential get requests
     """
-    return [requests.get(url).json() for url in urls]
+
+    def get_http_with_retry(url, total=3, backoff_factor=30, method='GET', **kwargs):
+        """
+        Retry unreliable service with delay between retries
+        """
+        s = requests.Session()
+        retries = Retry(total=total,
+                        backoff_factor=backoff_factor,
+                        status_forcelist=[500, 502, 503, 504])
+        s.mount('http://', HTTPAdapter(max_retries=retries))
+        if method == 'GET':
+            return s.get(url)
+        if method == 'POST':
+            return s.post(url, **kwargs)
+
+    return [get_http_with_retry(url, **kwargs).json() for url in urls]
 
 
 def adjust_data_change(df, change_date=pd.to_datetime('2021-08-15'), overlap=timedelta(days=7)):
@@ -83,14 +101,13 @@ def get_query_urls(token, query, engine='keyword', freq='-3h',
         url_request += f'&bband_period={bband_period}&bband_std={bband_std}&ta_indicator={ta_indicator}'
 
     url_request += f'&z_score={z_score}'
-    print(url_request)
     return url_request
 
 
 def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
                start_date=None, end_date=None, run_async=True,
                bband_period=None, bband_std=2, ta_indicator='coverage', z_score=False,
-               normalise_data_split=True):
+               normalise_data_split=True, retry_attempts=3):
     """
     Query ADASE API to a frame
     :param normalise_data_split:
@@ -100,6 +117,7 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
         `7d`, `14d`, `28d`, `92d`, `365d`
     :param bband_std: float, standard deviation
     :param run_async: bool
+    :param retry_attempts: int, number of HTTP retries sent to backend
     :param queries:  str, syntax varies by engine
         engine='keyword':
             `(+Bitcoin -Luna) OR (+ETH), (+crypto)`
@@ -125,11 +143,14 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
                          for query in queries_split])
 
     if run_async:
-        responses = async_aiohttp_get_all(urls)
+        responses = async_aiohttp_get_all(urls, retry_attempts=retry_attempts)
     else:
         responses = http_get_all(urls)
 
     for query, response in zip(queries_split, responses):
+        if response is None or 'data' not in response.keys():
+            logging.warning(f"failed query: {query}")
+            continue
         frame = pd.DataFrame(response['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
             lambda dt: datetime.strptime(dt, "%Y%m%d" if len(dt) == 8 else "%Y%m%d%H")))
@@ -145,6 +166,9 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     if engine == 'news':
         return pd.concat(frames)  # assumed one topic (query) at a time
 
+    if len(frames) == 0:
+        logging.warning(f"No any results")
+        return
     resp = reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
 
     return resp
