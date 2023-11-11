@@ -1,4 +1,4 @@
-import requests, asyncio, aiohttp, logging
+import requests, asyncio, aiohttp, logging, json
 from asgiref import sync
 from datetime import datetime, timedelta
 from functools import reduce
@@ -8,10 +8,8 @@ from requests.adapters import HTTPAdapter, Retry
 from aiohttp_retry import RetryClient
 from scipy.stats import zscore
 from adase_api.docs.config import AdaApiConfig
-
-
-def auth(username, password):
-    return requests.post(AdaApiConfig.AUTH_HOST, data={'username': username, 'password': password}).json()
+from adase_api.helpers import auth
+from adase_api.schema.sentiment import QuerySentimentAPI
 
 
 def async_aiohttp_get_all(urls, retry_attempts=3):
@@ -35,19 +33,19 @@ def async_aiohttp_get_all(urls, retry_attempts=3):
     return sync.async_to_sync(get_all)(urls)
 
 
-def http_get_all(urls, **kwargs):
+def http_get_all(urls, retry_attempts=3, backoff_factor=30, **kwargs):
     """
     Sequential get requests
     """
 
-    def get_http_with_retry(url, total=3, backoff_factor=30, method='GET', **kwargs):
+    def get_http_with_retry(url, method='GET', **kwargs):
         """
         Retry unreliable service with delay between retries
         """
         s = requests.Session()
-        retries = Retry(total=total,
+        retries = Retry(total=retry_attempts,
                         backoff_factor=backoff_factor,
-                        status_forcelist=[500, 502, 503, 504])
+                        status_forcelist=[500, 502, 503, 504, 429, 400])
         s.mount('http://', HTTPAdapter(max_retries=retries))
         if method == 'GET':
             return s.get(url)
@@ -64,52 +62,42 @@ def adjust_data_change(df, change_date=pd.to_datetime('2021-08-15'), overlap=tim
     return zscore(before).append(zscore(after)).clip(lower=-3, upper=3)
 
 
-def get_query_urls(token, query, engine='keyword', freq='-3h',
-                   start_date=None, end_date=None,
-                   roll_period='7d',
-                   bband_period='21d',
-                   bband_std=2,
-                   ta_indicator='coverage',
-                   z_score=False):
+def get_query_urls(search_text, q: QuerySentimentAPI):
 
-    if start_date is not None:
-        start_date = quote_url(pd.to_datetime(start_date).isoformat())
-    if end_date is not None:
-        end_date = quote_url(pd.to_datetime(end_date).isoformat())
-
-    query = quote_url(query)
-    if engine == 'keyword':
+    query = quote_url(search_text)
+    if q.engine == 'keyword':
         host = AdaApiConfig.HOST_KEYWORD
-        api_path = engine
-    elif engine == 'topic':
+        api_path = q.engine
+    elif q.engine == 'topic':
         host = AdaApiConfig.HOST_TOPIC
         api_path = 'topic'
-    elif engine == 'news':
+    elif q.engine == 'news':
         host = AdaApiConfig.HOST_TOPIC
         api_path = "rank-news"
     else:
-        raise NotImplemented(f"engine={engine} not supported")
+        raise NotImplemented(f"engine={q.engine} not supported")
 
-    url_request = f"{host}:{AdaApiConfig.PORT}/{api_path}/{query}&token={token}" \
-                  f"?freq={freq}&roll_period={roll_period}"
-    if start_date is not None:
+    url_request = f"{host}:{AdaApiConfig.PORT}/{api_path}/{query}&token={q.token}" \
+                  f"?freq={q.process_cfg.freq}&roll_period={q.process_cfg.roll_period}"
+
+    if q.start_date is not None:
+        start_date = quote_url(pd.to_datetime(q.start_date).isoformat())
         url_request += f'&start_date={start_date}'
-        if end_date is not None:
+        if q.end_date is not None:
+            end_date = quote_url(pd.to_datetime(q.end_date).isoformat())
             url_request += f'&end_date={end_date}'
 
-    if bband_period is not None:
-        url_request += f'&bband_period={bband_period}&bband_std={bband_std}&ta_indicator={ta_indicator}'
+    if q.bband is not None:
+        url_request += f'&bband_period={q.bband.period}&bband_std={q.bband.std}&ta_indicator={q.bband.indicator}'
 
-    url_request += f'&z_score={z_score}'
+    url_request += f'&z_score={q.process_cfg.z_score}'
     return url_request
 
 
-def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
-               start_date=None, end_date=None, run_async=True,
-               bband_period=None, bband_std=2, ta_indicator='coverage', z_score=False,
-               normalise_data_split=True, retry_attempts=3):
+def load_sentiment(q: QuerySentimentAPI, normalise_data_split=False, retry_attempts=3):
     """
     Query ADASE API to a frame
+    :param q:
     :param normalise_data_split:
     :param z_score: bool, data normalisation
     :param ta_indicator: str, feature name to apply technical (chart) analysis
@@ -133,16 +121,15 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     :param end_date: str
     :return: pd.DataFrame
     """
-    auth_resp = auth(AdaApiConfig.USERNAME, AdaApiConfig.PASSWORD)
-    queries_split = queries.split(',')
-    frames = []
-    urls = filter(None, [get_query_urls(auth_resp['access_token'], query, engine=engine, freq=freq,
-                                        start_date=start_date, end_date=end_date, roll_period=roll_period,
-                                        bband_period=bband_period, bband_std=bband_std, z_score=z_score,
-                                        ta_indicator=ta_indicator)
-                         for query in queries_split])
+    if not q.token:
+        auth_token = auth(q.credentials.username, q.credentials.password)
+        q.token = auth_token
 
-    if run_async:
+    queries_split = q.many_query.split(',')
+    frames = []
+    urls = filter(None, [get_query_urls(search_text, q) for search_text in queries_split])
+
+    if q.run_async:
         responses = async_aiohttp_get_all(urls, retry_attempts=retry_attempts)
     else:
         responses = http_get_all(urls)
@@ -159,11 +146,11 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
         else:
             frame = frame.set_index(['date_time', 'query', 'source']).unstack(1)
 
-            if normalise_data_split and engine == 'topic' and z_score:
+            if normalise_data_split and q.engine == 'topic' and q.z_score:
                 frame = adjust_data_change(frame.unstack(1)).stack()
             frames += [frame]
 
-    if engine == 'news':
+    if q.engine == 'news':
         return pd.concat(frames)  # assumed one topic (query) at a time
 
     if len(frames) == 0:
@@ -172,3 +159,29 @@ def load_frame(queries, engine='topic', freq='-1h', roll_period='7d',
     resp = reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
 
     return resp
+
+
+def load_kei(query, thresh=0.2, top_n=30, retry_attempts=3):
+    """
+    Query economic indicators
+    :query: str, one query, `Inflation in Germany`
+    :thresh: float, minimal textual similarity
+    :top_n: int, number of best hits
+    :retry_attempts: int, number of HTTP retries
+    :return: pd.DataFrame, economic indicator's ranked by relevance
+    """
+    auth_token = auth(AdaApiConfig.USERNAME, AdaApiConfig.PASSWORD)
+    host = AdaApiConfig.HOST_TOPIC
+    api_path = "rank-kei"
+
+    query = quote_url(query)
+    url = f"{host}:{AdaApiConfig.PORT}/{api_path}/{query}&token={auth_token}" \
+          f"?one_query={query}&top_n={top_n}&thresh={thresh}"
+
+    response = http_get_all([url], retry_attempts=retry_attempts)
+    if len(response) == 0:
+        logging.warning(f"No any results")
+        return
+
+    return pd.read_json(json.dumps(next(iter(response))['data']))
+

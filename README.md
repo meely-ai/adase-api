@@ -23,18 +23,24 @@ pip install adase-api
   - Amount of sub-queries is not limited and is executed in parallel
 
 #### To use API you need to provide API credentials as environment variables
+`adase_api.query.load_sentiment` method has more configurations described in the docstring
 ```python
-import os
-os.environ['ADA_API_USERNAME'] = "myaccount@email.com"
-os.environ['ADA_API_PASSWORD'] = "p@ssw0rd"
-```
-`adase_api.query.Explorer` class has more configurations described in the docstring
-```python
-from adase_api import query
+from adase_api.query import load_sentiment
+from adase_api.schema.sentiment import Credentials
+from adase_api.schema.sentiment import QuerySentimentAPI, ProcessConfig, BBandConfig
 
-q = "(+Bitcoin -Luna) OR (+ETH), (+crypto)"
-df = query.load_frame(q, engine='keyword', start_date='2022-01-01', end_date='2022-05-29')
-df.unstack(2).tail()
+credentials = Credentials(username='youruser@gmail.com', password='yourpass')
+
+search_keywords = "(+Bitcoin -Luna) OR (+ETH), (+crypto)", # each query separated by ","
+ada_query = QuerySentimentAPI(
+    many_query=search_keywords,
+        engine='keyword', 
+        process_cfg=ProcessConfig(roll_period='28d', freq='-1d', z_score=True),
+    credentials=credentials,
+    run_async=False
+)
+sentiment = load_sentiment(ada_query)
+sentiment.unstack(2).tail()
 ```
 Returns coverage, hits, score and score_coverage to a pandas dataframe
 ```text
@@ -65,9 +71,16 @@ Since data is weekly seasonal, a 7-day rolling average is applied by default
 ```python
 from adase_api import query
 
-q = "inflation rates, OPEC cartel"
-df = query.load_frame(q, engine='topic', start_date='2022-01-01')
-df.unstack(2).tail(10)
+search_topics = "inflation rates, OPEC cartel"
+ada_query = QuerySentimentAPI(
+    many_query=search_topics,
+        engine='topic', 
+        process_cfg=ProcessConfig(roll_period='28d', freq='-1d', z_score=True),
+    credentials=credentials,
+    run_async=False
+)
+sentiment = load_sentiment(ada_query)
+sentiment.unstack(2).tail(10)
 ```
 ```text
 query                      inflation rates                      OPEC cartel                     
@@ -89,10 +102,16 @@ it's visible data feed comes detailed per source type:
 - `social` includes social platforms and blogs
 - `corp` covers corporate communication as company newsrooms and regulatory filings
 - `avg` is a weighted average of all
+### API rate limit
+All endpoints have set limit on API calls per minute, by default 10 calls  / min.
+
 ### In case you don't have yet the credentials, you can [sign up for free](https://adalytica.io/signup)
 - Data available since January 1, 2006
 - Easy way to explore or backtest
 - In a trial version data lags 24-hours
 - Probably something else? Hopefully this data could inspire for some innovative solutions to your problem
 
-You can follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/) 
+You can follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/)
+
+### Questions?
+For package questions, rate limit or feedback you can reach out to info@adalytica.io
