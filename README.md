@@ -31,7 +31,7 @@ from adase_api.schema.sentiment import QuerySentimentAPI, ProcessConfig, BBandCo
 
 credentials = Credentials(username='youruser@gmail.com', password='yourpass')
 
-search_keywords = "(+Bitcoin -Luna) OR (+ETH), (+crypto)", # each query separated by ","
+search_keywords = "(+Bitcoin -Luna) OR (+ETH), (+crypto)" # each query separated by ","
 ada_query = QuerySentimentAPI(
     many_query=search_keywords,
         engine='keyword', 

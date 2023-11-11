@@ -47,12 +47,10 @@ def http_get_all(urls, retry_attempts=3, backoff_factor=30, **kwargs):
                         backoff_factor=backoff_factor,
                         status_forcelist=[500, 502, 503, 504, 429, 400])
         s.mount('http://', HTTPAdapter(max_retries=retries))
-        if method == 'GET':
-            return s.get(url)
-        if method == 'POST':
-            return s.post(url, **kwargs)
+        resp = s.get(url) if method == 'GET' else s.post(url, **kwargs) if method == 'POST' else {}
+        return resp
 
-    return [get_http_with_retry(url, **kwargs).json() for url in urls]
+    return [get_http_with_retry(url, **kwargs) for url in urls]
 
 
 def adjust_data_change(df, change_date=pd.to_datetime('2021-08-15'), overlap=timedelta(days=7)):
@@ -135,10 +133,12 @@ def load_sentiment(q: QuerySentimentAPI, normalise_data_split=False, retry_attem
         responses = http_get_all(urls)
 
     for query, response in zip(queries_split, responses):
-        if response is None or 'data' not in response.keys():
+        if response is None or 'data' not in response.json().keys():
             logging.warning(f"failed query: {query}")
+            reason = json.loads(json.loads(response.content)['detail'])['detail']
+            logging.warning(f"HTTP {response.status_code}, {reason}")
             continue
-        frame = pd.DataFrame(response['data'])
+        frame = pd.DataFrame(response.json()['data'])
         frame.date_time = pd.DatetimeIndex(frame.date_time.apply(
             lambda dt: datetime.strptime(dt, "%Y%m%d" if len(dt) == 8 else "%Y%m%d%H")))
         if 'query' not in frame.columns:
@@ -154,7 +154,7 @@ def load_sentiment(q: QuerySentimentAPI, normalise_data_split=False, retry_attem
         return pd.concat(frames)  # assumed one topic (query) at a time
 
     if len(frames) == 0:
-        logging.warning(f"No any results")
+        logging.warning(f"No results")
         return
     resp = reduce(lambda l, r: l.join(r, how='outer'), frames).stack(0)
 

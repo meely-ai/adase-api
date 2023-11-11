@@ -44,7 +44,7 @@ def auth(username, password):
     try:
         return auth_resp['access_token']
     except KeyError:
-        raise AssertionError(f"unauthenticated, provided username: `{AdaApiConfig.USERNAME}`")
+        raise AssertionError(f"Anauthenticated, provided username: `{username}`")
 
 
 def sentiment_by_geography_to_frame(ada_geoh3):
