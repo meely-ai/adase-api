@@ -3,7 +3,8 @@ from requests.adapters import HTTPAdapter, Retry
 from datetime import datetime
 from functools import reduce
 import pandas as pd
-from adase_api.schema.geo import GeoH3Interface, QueryStationData
+from adase_api.schemas.geo import GeoH3Interface, QueryStationData, QueryTextMobility, \
+    QueryTagGeo, Credentials, QueryMobility
 from adase_api.docs.config import AdaApiConfig
 
 
@@ -60,3 +61,19 @@ def read_geoh3_station(q: QueryStationData, geoh3_airport_code, geoh3_dict):
         {code: geoh3 for geoh3, code in geoh3_airport_code.items()})
     geoh3_airport_data['density'] = geoh3_airport_data['geoh3'].map(geoh3_dict)
     return geoh3_airport_data
+
+
+def load_one_mobility(text: list, credentials: Credentials, aggregated=True):
+    q = QueryTextMobility(
+        credentials=credentials,
+        tag_geo=QueryTagGeo(text=text),
+        geo_h3_interface=GeoH3Interface(),
+        mobility=QueryMobility(aggregated=aggregated)
+    )
+    if not q.token:
+        auth_token = auth(q.credentials.username, q.credentials.password)
+        q.token = auth_token
+        q.tag_geo.token = auth_token
+    # TODO: make it parse list of strings instead of a single str
+    mobility = query_api(q.dict(), AdaApiConfig.HOST_GEO, endpoint='get-mobility-by-text')
+    return process_mobility_api(mobility).km_min.interpolate(method='linear')

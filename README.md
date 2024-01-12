@@ -24,20 +24,21 @@ pip install adase-api
 
 #### To use API you need to provide API credentials as environment variables
 `adase_api.query.load_sentiment` method has more configurations described in the docstring
+
 ```python
-from adase_api.query import load_sentiment
-from adase_api.schema.sentiment import Credentials
-from adase_api.schema.sentiment import QuerySentimentAPI, ProcessConfig, BBandConfig
+from adase_api.sentiment import load_sentiment
+from adase_api.schemas.sentiment import Credentials
+from adase_api.schemas.sentiment import QuerySentimentAPI, ProcessConfig
 
 credentials = Credentials(username='youruser@gmail.com', password='yourpass')
 
-search_keywords = "(+Bitcoin -Luna) OR (+ETH), (+crypto)" # each query separated by ","
+search_keywords = "(+Bitcoin -Luna) OR (+ETH), (+crypto)"  # each query separated by ","
 ada_query = QuerySentimentAPI(
-    many_query=search_keywords,
-        engine='keyword', 
-        process_cfg=ProcessConfig(roll_period='28d', freq='-1d', z_score=True),
-    credentials=credentials,
-    run_async=False
+  many_query=search_keywords,
+  engine='keyword',
+  process_cfg=ProcessConfig(roll_period='28d', freq='-1d', z_score=True),
+  credentials=credentials,
+  run_async=False
 )
 sentiment = load_sentiment(ada_query)
 sentiment.unstack(2).tail()
@@ -69,47 +70,54 @@ Since data is weekly seasonal, a 7-day rolling average is applied by default
   - to reflect changing world situation, underlying models are constantly re-trained making sure relations are up-to-date
 
 ```python
-from adase_api import query
-
-search_topics = "inflation rates, OPEC cartel"
-ada_query = QuerySentimentAPI(
-    many_query=search_topics,
-        engine='topic', 
-        process_cfg=ProcessConfig(roll_period='28d', freq='-1d', z_score=True),
-    credentials=credentials,
-    run_async=False
+from adase_api.sentiment import load_sentiment_topic
+from adase_api.schemas.sentiment import QuerySentimentTopic
+search_topics = ["inflation rates", "OPEC cartel"]
+ada_query = QuerySentimentTopic(
+  many_query=search_topics,
+  credentials=credentials,
+  run_async=False
 )
-sentiment = load_sentiment(ada_query)
-sentiment.unstack(2).tail(10)
+sentiment = load_sentiment_topic(ada_query)
+sentiment.tail(10)
 ```
 ```text
-query                      inflation rates                      OPEC cartel                     
-                                  coverage       hits     score    coverage       hits     score
-date_time           source                                                                      
-2022-05-26 07:00:00 media         0.002947   6.220238 -0.059335    0.001945   5.619048 -0.034639
-                    social        0.008054  50.779762  0.023118    0.003774  29.595238  0.022136
-2022-05-26 08:00:00 avg           0.004778  24.073413  0.002614    0.002553  15.003968  0.007849
-                    corp          0.000297   0.565476  0.054003    0.000384   0.761905  0.050364
-                    media         0.002935   6.172619 -0.060830    0.001940   5.595238 -0.034008
-                    social        0.008023  50.416667  0.024123    0.003775  29.482143  0.020868
-2022-05-26 09:00:00 avg           0.004770  23.942460  0.004983    0.002540  14.908730  0.009729
-                    corp          0.000297   0.565476  0.054003    0.000384   0.761905  0.050364
-                    media         0.002950   6.125000 -0.057586    0.001922   5.523810 -0.028692
-                    social        0.007991  50.202381  0.025980    0.003767  29.363095  0.019497
+                          score                    coverage                
+query               OPEC cartel inflation rates OPEC cartel inflation rates
+date_time                                                                  
+2024-01-12 03:00:00    0.170492       -3.210051   -0.270801        1.600013
+2024-01-12 04:00:00    0.184400       -0.621429   -0.270801        1.600013
+2024-01-12 05:00:00    0.170492        0.952482   -0.270801        0.414950
+2024-01-12 06:00:00    0.170492       -0.114074   -0.270801        0.414950
+2024-01-12 07:00:00    0.170492        0.804350   -0.270801        0.414950
+2024-01-12 08:00:00    0.170492        0.241445   -0.270801        1.600013
+2024-01-12 09:00:00    0.170492        1.548717   -0.270801        3.970140
 ```
-it's visible data feed comes detailed per source type: 
-- `media` indicates newspapers, TV, radio and other mass media
-- `social` includes social platforms and blogs
-- `corp` covers corporate communication as company newsrooms and regulatory filings
-- `avg` is a weighted average of all
+When `normalize_to_global`=True data comes more sparse, since query hits most likely won't be found every hour. 
+In this case missing records, both `coverage` and `score` are filled with 0's
+
+## Mobility Index
+#### Monitor traffic (on the road) situation on the city-to-airport pairs
+
+```python
+from adase_api.schemas.geo import QueryTagGeo, GeoH3Interface, QueryTextMobility, QueryMobility
+from adase_api.geo import load_mobility_by_text
+
+q = QueryTextMobility(
+    tag_geo=QueryTagGeo(text='Gdansk'),
+    geo_h3_interface=GeoH3Interface(),
+    mobility=QueryMobility(aggregated=False)
+)
+mobility = load_mobility_by_text(q)
+```
 ### API rate limit
 All endpoints have set limit on API calls per minute, by default 10 calls  / min.
 
 ### In case you don't have yet the credentials, you can [sign up for free](https://adalytica.io/signup)
-- Data available since January 1, 2006
+- Data available since January 1, 2001
 - Easy way to explore or backtest
 - In a trial version data lags 24-hours
-- Probably something else? Hopefully this data could inspire for some innovative solutions to your problem
+- Probably something else? Hopefully the data can inspire you for other use cases
 
 You can follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/)
 

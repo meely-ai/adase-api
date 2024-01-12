@@ -9,7 +9,7 @@ from aiohttp_retry import RetryClient
 from scipy.stats import zscore
 from adase_api.docs.config import AdaApiConfig
 from adase_api.helpers import auth
-from adase_api.schema.sentiment import QuerySentimentAPI
+from adase_api.schemas.sentiment import QuerySentimentAPI, QuerySentimentTopic
 
 
 def async_aiohttp_get_all(urls, retry_attempts=3):
@@ -69,9 +69,6 @@ def get_query_urls(search_text, q: QuerySentimentAPI):
     elif q.engine == 'topic':
         host = AdaApiConfig.HOST_TOPIC
         api_path = 'topic'
-    elif q.engine == 'news':
-        host = AdaApiConfig.HOST_TOPIC
-        api_path = "rank-news"
     else:
         raise NotImplemented(f"engine={q.engine} not supported")
 
@@ -125,8 +122,8 @@ def load_sentiment(q: QuerySentimentAPI, normalise_data_split=False, retry_attem
 
     queries_split = q.many_query.split(',')
     frames = []
-    urls = filter(None, [get_query_urls(search_text, q) for search_text in queries_split])
-
+    urls = list(filter(None, [get_query_urls(search_text, q) for search_text in queries_split]))
+    print(urls)
     if q.run_async:
         responses = async_aiohttp_get_all(urls, retry_attempts=retry_attempts)
     else:
@@ -184,4 +181,42 @@ def load_kei(query, thresh=0.2, top_n=30, retry_attempts=3):
         return
 
     return pd.read_json(json.dumps(next(iter(response))['data']))
+
+
+def load_sentiment_topic(q: QuerySentimentTopic):
+    """
+    Query ADASE API to a frame
+    :param q:
+    :param normalise_data_split:
+    :param z_score: bool, data normalisation
+    :param ta_indicator: str, feature name to apply technical (chart) analysis
+    :param bband_period: str, supported
+        `7d`, `14d`, `28d`, `92d`, `365d`
+    :param bband_std: float, standard deviation
+    :param run_async: bool
+    :param retry_attempts: int, number of HTTP retries sent to backend
+    :param queries:  str, syntax varies by engine
+        engine='keyword':
+            `(+Bitcoin -Luna) OR (+ETH), (+crypto)`
+        engine='topic':
+            `inflation rates, OPEC cartel`
+    :param engine: str,
+        `keyword`: boolean operators, more https://solr.apache.org/guide/6_6/the-standard-query-parser.html
+        `topic`: plain text, works best with 2-4 words
+    :param freq: str, https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
+    :param roll_period: str, supported
+        `7d`, `28d`, `92d`, `365d`
+    :param start_date: str
+    :param end_date: str
+    :return: pd.DataFrame
+    """
+    if not q.token:
+        auth_token = auth(q.credentials.username, q.credentials.password)
+        q.token = auth_token
+    url = f'{AdaApiConfig.HOST_TOPIC}/topic-stats/{q.token}'
+    response = requests.post(url, json=json.loads(q.json()))
+    df = pd.read_json(response.json())
+    df.index = pd.DatetimeIndex(pd.to_datetime(df['index'], unit='ms'), name='date_time')
+    df = df.set_index(['query'], append=True).drop("index", axis=1).unstack('query')
+    return df.iloc[:-1, :]
 

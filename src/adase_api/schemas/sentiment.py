@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from enum import Enum
 
@@ -72,12 +72,34 @@ class Credentials(BaseModel):
 
 class QuerySentimentAPI(BaseModel):
     token: Optional[str] = None
-    many_query: str  # comma separated, syntax depends on engine
+    many_query: List  # comma separated, syntax depends on engine
     engine: Optional[SentimentEngine] = 'topic'
-    start_date: Optional[datetime] = datetime.utcnow() - timedelta(days=720)
+    start_date: Optional[datetime] = datetime.utcnow() - timedelta(days=92)
     end_date: Optional[datetime] = None
     time_started: Optional[datetime] = datetime.utcnow()
     process_cfg: Optional[ProcessConfig] = ProcessConfig()
     bband: Optional[BBandConfig] = None
+    normalize_to_global: Optional[bool] = True
+    z_score: Optional[bool] = True
+    min_topic_score: Optional[float] = 0.22
+    topic_missing_penalty: Optional[bool] = 0.05
+    run_async: Optional[bool] = True
+    credentials: Optional[Credentials] = Credentials()
+
+
+class QuerySentimentTopic(BaseModel):
+    token: Optional[str] = None
+
+    text: List
+    top_n: Optional[int] = 3
+    normalize_to_global: Optional[bool] = True
+    z_score: Optional[bool] = True
+    min_global_row_count: Optional[int] = 100  # min no. of global rows to estimate a chart
+    min_topic_score: Optional[float] = 0.22
+    topic_missing_penalty: Optional[float] = 0.05
+    start_date: Optional[datetime]
+    end_date: Optional[datetime]
+    freq: Optional[str] = '-1h'
+
     run_async: Optional[bool] = True
     credentials: Optional[Credentials] = Credentials()

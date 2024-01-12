@@ -1,13 +1,13 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from enum import Enum
-from adase_api.schema.sentiment import Credentials
+from adase_api.schemas.sentiment import Credentials
 
 
 class QueryTagGeo(BaseModel):
     token: Optional[str] = None
-    text: str
+    text: List
     keep_top_n: Optional[int] = 2  # maximal number of geographic matches
     min_avg_score: Optional[float] = 0.12  # value between [0, 1], too small value will lead to too many false positives
 
