@@ -218,5 +218,7 @@ def load_sentiment_topic(q: QuerySentimentTopic):
     df = pd.read_json(response.json())
     df.index = pd.DatetimeIndex(pd.to_datetime(df['index'], unit='ms'), name='date_time')
     df = df.set_index(['query'], append=True).drop("index", axis=1).unstack('query')
-    return df.iloc[:-1, :]
+    if q.live:  # might be incomplete
+        df = df.iloc[:-1, :]
+    return df
 

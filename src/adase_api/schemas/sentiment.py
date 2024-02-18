@@ -62,7 +62,6 @@ class ProcessConfig(BaseModel):
 class SentimentEngine(str, Enum):
     topic = 'topic'  # deep-learning, shorter history
     keyword = 'keyword'  # keywords
-    news = 'news'  # rank news
 
 
 class Credentials(BaseModel):
@@ -81,8 +80,6 @@ class QuerySentimentAPI(BaseModel):
     bband: Optional[BBandConfig] = None
     normalize_to_global: Optional[bool] = True
     z_score: Optional[bool] = True
-    min_topic_score: Optional[float] = 0.22
-    topic_missing_penalty: Optional[bool] = 0.05
     run_async: Optional[bool] = True
     credentials: Optional[Credentials] = Credentials()
 
@@ -95,11 +92,13 @@ class QuerySentimentTopic(BaseModel):
     normalize_to_global: Optional[bool] = True
     z_score: Optional[bool] = True
     min_global_row_count: Optional[int] = 100  # min no. of global rows to estimate a chart
-    min_topic_score: Optional[float] = 0.22
-    topic_missing_penalty: Optional[float] = 0.05
     start_date: Optional[datetime]
     end_date: Optional[datetime]
     freq: Optional[str] = '-1h'
+    languages: Optional[list] = []
+    check_geoh3: Optional[bool] = False
 
+    live: Optional[bool] = True
+    max_rows: Optional[int] = 10000
     run_async: Optional[bool] = True
     credentials: Optional[Credentials] = Credentials()

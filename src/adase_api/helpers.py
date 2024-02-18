@@ -74,6 +74,5 @@ def load_one_mobility(text: list, credentials: Credentials, aggregated=True):
         auth_token = auth(q.credentials.username, q.credentials.password)
         q.token = auth_token
         q.tag_geo.token = auth_token
-    # TODO: make it parse list of strings instead of a single str
     mobility = query_api(q.dict(), AdaApiConfig.HOST_GEO, endpoint='get-mobility-by-text')
-    return process_mobility_api(mobility).km_min.interpolate(method='linear')
+    return [process_mobility_api(one).km_min.interpolate(method='linear') for t, one in zip(text, mobility)]
