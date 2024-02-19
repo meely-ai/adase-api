@@ -9,90 +9,97 @@ ADASE supports `keyword` and `topic` engines, as explained below
 ```commandline
 pip install adase-api
 ```
-## Keyword search engine
-### Query syntax
-- Each condition is placed inside of round brackets `()`, where
-  - `+` indicates a search term must be found
-  - and `-` excludes it
-- Multiple conditions can be combined with logical operators
-  - `OR`
-  - `AND`
-- Also you can separate by comma "," multiple requests for a parallel processing as below:
-  - `"(+Bitcoin -Luna) OR (+ETH), (+crypto)"`
-  - Will return matches to data that hit `Bitcoin` or `ETH` but not `Luna` for the first query, and  `crypto` for the second
-  - Amount of sub-queries is not limited and is executed in parallel
-
-#### To use API you need to provide API credentials as environment variables
+## Sentiment Open Query
+To use API you need to provide API credentials as environment variables and search topic
 ```python
-import os
-os.environ['ADA_API_USERNAME'] = "myaccount@email.com"
-os.environ['ADA_API_PASSWORD'] = "p@ssw0rd"
-```
-`adase_api.query.Explorer` class has more configurations described in the docstring
-```python
-from adase_api import query
+from adase_api.schemas.sentiment import Credentials, QuerySentimentTopic
+from adase_api.sentiment import load_sentiment_topic
 
-q = "(+Bitcoin -Luna) OR (+ETH), (+crypto)"
-df = query.load_frame(q, engine='keyword', start_date='2022-01-01', end_date='2022-05-29')
-df.unstack(2).tail()
-```
-Returns coverage, hits, score and score_coverage to a pandas dataframe
-```text
-query                      (+Bitcoin -Luna) OR (+ETH)                      (+crypto)                     
-                                       coverage       hits     score  coverage       hits     score
-date_time           source                                                                         
-2022-05-27 11:00:00 all                0.026520  36.676056  0.218439  0.055207  76.487535  0.267412
-2022-05-27 12:00:00 all                0.026497  36.668539  0.216516  0.055200  76.518006  0.267331
-2022-05-27 13:00:00 all                0.026443  36.616246  0.215001  0.055238  76.554017  0.266730
-2022-05-27 14:00:00 all                0.026442  36.605042  0.213506  0.055187  76.481994  0.266553
-2022-05-27 15:00:00 all                0.026452  36.647059  0.212794  0.055199  76.512465  0.265416
-```
-Since data is weekly seasonal, a 7-day rolling average is applied by default
+credentials = Credentials(username='youruser@gmail.com', password='yourpass')
 
-## Topic embedding search engine
-### Topic syntax
-
-- In contrast with keyword based search, topic syntax allows to query data in a fuzzy way. It works the best when 2-5 words describe some wider concepts, examples:
-  - "NASDAQ technology index"
-  - "Airline travel demand"
-  - "Energy disruptions in Europe"
-- Such queries will include related concept
-  - for "NASDAQ technology index" it might also consider terms as "Dow Jones", "FAANG", "FTSE" etc.
-  - exact structure depends mostly on how topics co-occur together
-  - intuition behind is that NASDAQ is US tech stock index, but if data contains strong signals from FTSE, a British blue chip index, or Dow Jones, less tech heavy index, this will also have an impact on query of interest
-  - to reflect changing world situation, underlying models are constantly re-trained making sure relations are up-to-date
-
-```python
-from adase_api import query
-
-q = "inflation rates, OPEC cartel"
-df = query.load_frame(q, engine='topic', start_date='2022-01-01')
-df.unstack(2).tail(10)
+search_topics = ["inflation rates", "OPEC cartel"]
+ada_query = QuerySentimentTopic(
+  text=search_topics,
+  credentials=credentials
+)
+sentiment = load_sentiment_topic(ada_query)
+sentiment.tail(10)
 ```
 ```text
-query                      inflation rates                      OPEC cartel                     
-                                  coverage       hits     score    coverage       hits     score
-date_time           source                                                                      
-2022-05-26 07:00:00 media         0.002947   6.220238 -0.059335    0.001945   5.619048 -0.034639
-                    social        0.008054  50.779762  0.023118    0.003774  29.595238  0.022136
-2022-05-26 08:00:00 avg           0.004778  24.073413  0.002614    0.002553  15.003968  0.007849
-                    corp          0.000297   0.565476  0.054003    0.000384   0.761905  0.050364
-                    media         0.002935   6.172619 -0.060830    0.001940   5.595238 -0.034008
-                    social        0.008023  50.416667  0.024123    0.003775  29.482143  0.020868
-2022-05-26 09:00:00 avg           0.004770  23.942460  0.004983    0.002540  14.908730  0.009729
-                    corp          0.000297   0.565476  0.054003    0.000384   0.761905  0.050364
-                    media         0.002950   6.125000 -0.057586    0.001922   5.523810 -0.028692
-                    social        0.007991  50.202381  0.025980    0.003767  29.363095  0.019497
+                          score                    coverage                
+query               OPEC cartel inflation rates OPEC cartel inflation rates
+date_time                                                                  
+2024-01-12 03:00:00    0.170492       -3.210051   -0.270801        1.600013
+2024-01-12 04:00:00    0.184400       -0.621429   -0.270801        1.600013
+2024-01-12 05:00:00    0.170492        0.952482   -0.270801        0.414950
+2024-01-12 06:00:00    0.170492       -0.114074   -0.270801        0.414950
+2024-01-12 07:00:00    0.170492        0.804350   -0.270801        0.414950
+2024-01-12 08:00:00    0.170492        0.241445   -0.270801        1.600013
+2024-01-12 09:00:00    0.170492        1.548717   -0.270801        3.970140
 ```
-it's visible data feed comes detailed per source type: 
-- `media` indicates newspapers, TV, radio and other mass media
-- `social` includes social platforms and blogs
-- `corp` covers corporate communication as company newsrooms and regulatory filings
-- `avg` is a weighted average of all
+* Returns `coverage` and `score` (sentiment) to a pandas DataFrame.
+* When `normalize_to_global`=True data comes more sparse, since query hits most likely won't be found every hour. 
+* In this case missing records, both `coverage` and `score` are filled with 0's
+* `coverage` field is usually seasonal, is adviced to apply a 7-day rolling average
+* By default, is queried **live** data, that comes on an hourly basis and includes 6 months history
+
+### Search topic syntax
+1. **Plain text**
+   - In contrast with keyword search, plain text relies on topics to query data on wider concept. It works the best when 2-5 words describe some concepts, examples:
+     - `"stock market"`, it might also analyse terms as `"Dow Jones"`, `"FAANG"` etc.
+     - `"Airline travel demand"`
+     - `"Energy disruptions in Europe"`
+     - `"President Joe Biden"`
+   - analysed scope depends on how words normally co-occur together
+   <br><br>
+2. **Boolean search**
+   - Search for exact keyword match 
+   - Each condition is placed inside of round brackets `()`, where
+     - `+` indicates a search term must be found
+     - and `-` excludes it
+   - For example `"(+Ford +Motor*)`, asterix `*` will include both `Motor` & `Motors`
+```python
+import pandas as pd
+
+search_topics = ["(+inflation)"]
+ada_query = QuerySentimentTopic(
+    text=search_topics,
+    credentials=credentials,
+    languages=['de', 'ro', 'pt', 'pl'],
+    live=False,
+    start_date=pd.to_datetime('2010-01-01')
+)
+```
+This query will do a boolean search on historical data starting from **Jan 1, 2010** and include only data in specified languages
+
+## Mobility Index
+**Monitor traffic (on the road) situation on the city-to-airport pairs**
+<br><br>
+Besides the news monitoring, the package also provides interface to query worldwide real-time traffic situation.
+This can be useful in the combination with media or standalone.   
+```python
+from adase_api.schemas.geo import QueryTagGeo, GeoH3Interface, QueryTextMobility, QueryMobility
+from adase_api.geo import load_mobility_by_text
+
+q = QueryTextMobility(
+    credentials=credentials,
+    tag_geo=QueryTagGeo(text=['Gdansk']),
+    geo_h3_interface=GeoH3Interface(),
+    mobility=QueryMobility(aggregated=True)
+)
+mobility = load_mobility_by_text(q)
+```
+
+## API rate limit
+All endpoints have set limit on API calls per minute, by default 10 calls  / min.
+
 ### In case you don't have yet the credentials, you can [sign up for free](https://adalytica.io/signup)
-- Data available since January 1, 2006
+- Data available since January 1, 2001
 - Easy way to explore or backtest
 - In a trial version data lags 24-hours
-- Probably something else? Hopefully this data could inspire for some innovative solutions to your problem
+- Probably something else? Hopefully the data can inspire you for other use cases
 
-You can follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/) 
+You can follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/)
+
+### Questions?
+For package questions, rate limit or feedback you can reach out to info@adalytica.io
