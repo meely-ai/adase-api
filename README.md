@@ -82,9 +82,10 @@ from adase_api.schemas.geo import QueryTagGeo, GeoH3Interface, QueryTextMobility
 from adase_api.geo import load_mobility_by_text
 
 q = QueryTextMobility(
-    tag_geo=QueryTagGeo(text='Gdansk'),
+    credentials=credentials,
+    tag_geo=QueryTagGeo(text=['Gdansk']),
     geo_h3_interface=GeoH3Interface(),
-    mobility=QueryMobility(aggregated=False)
+    mobility=QueryMobility(aggregated=True)
 )
 mobility = load_mobility_by_text(q)
 ```
