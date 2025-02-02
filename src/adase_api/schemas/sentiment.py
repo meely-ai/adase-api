@@ -1,67 +1,9 @@
 import os
+import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, validator, ValidationError
 from enum import Enum
-
-
-class FreqGranularity(str, Enum):
-    """Down sample data frequency (from the last), usually to reduce latency and/or data size"""
-    NONE = ''
-    NONE2 = '-'
-    HIGH = "-1h"
-    MEDIUM = "-3h"
-    LOW = "-1d"
-    DEFAULT = os.environ.get('DEFAULT_FreqGranularity', '-1d')
-
-
-class RollPeriod(str, Enum):
-    NONE = ''
-    ONE_WEEK = "7d"
-    FOUR_WEEKS = "28d"
-    QUARTER = "92d"
-    YEAR = "365d"
-    DEFAULT = os.environ.get('DEFAULT_RollPeriod', '28d')
-
-
-class BBandPeriod(str, Enum):
-    """Supported Bollinger band periods"""
-    NONE = ''
-    WEEK = "7d"
-    TWO_WEEK = '14d'
-    FOUR_WEEK = '28d'
-    QUARTER = "92d"
-    YEAR = "365d"
-    DEFAULT = os.environ.get('DEFAULT_BBandPeriod', '28d')
-
-
-class TAIndicator(str, Enum):
-    """Supported indicators, used for technical analysis on sentiment"""
-    NONE = ''
-    COVERAGE = "coverage"  # query hits / total collection
-    SCORE = "score"  # sentiment polarity score
-    SCORE_COVERAGE = "score_coverage"  # `coverage` x `score`
-    HITS = "hits"  # absolute no. of query hits
-    DEFAULT = os.environ.get('DEFAULT_TAIndicator', 'coverage')
-
-
-class BBandConfig(BaseModel):
-    """Back-end side Bollinger bands settings (optional)"""
-    indicator: Optional[TAIndicator] = 'coverage'
-    period: Optional[BBandPeriod] = '7d'
-    std: Optional[int] = 2
-
-
-class ProcessConfig(BaseModel):
-    """Back-end side data processing (optional)"""
-    roll_period: Optional[RollPeriod] = ''  # rolling average
-    freq: Optional[FreqGranularity] = '-1d'  # down sample (from the end)
-    z_score: Optional[bool] = False  # z-score normalisation
-
-
-class SentimentEngine(str, Enum):
-    topic = 'topic'  # deep-learning, shorter history
-    keyword = 'keyword'  # keywords
 
 
 class Credentials(BaseModel):
@@ -69,25 +11,43 @@ class Credentials(BaseModel):
     password: Optional[str] = os.environ.get('ADA_API_PASSWORD', '')
 
 
-class QuerySentimentAPI(BaseModel):
-    token: Optional[str] = None
-    many_query: List  # comma separated, syntax depends on engine
-    engine: Optional[SentimentEngine] = 'topic'
-    start_date: Optional[datetime] = datetime.utcnow() - timedelta(days=92)
-    end_date: Optional[datetime] = None
-    time_started: Optional[datetime] = datetime.utcnow()
-    process_cfg: Optional[ProcessConfig] = ProcessConfig()
-    bband: Optional[BBandConfig] = None
-    normalize_to_global: Optional[bool] = True
-    z_score: Optional[bool] = True
-    run_async: Optional[bool] = True
-    credentials: Optional[Credentials] = Credentials()
+class FilterSampleDailySize(BaseModel):
+    daily_threshold: int = 10  # Minimum daily hits
+    total_records: float = 1e6  # Estimated total daily size
+    window: Optional[str] = "35d"  # Time window, e.g., "35d", "3d", "1w"
+
+    @validator("daily_threshold")
+    def validate_daily_threshold(cls, value):
+        if not (1 <= value <= 1e3):
+            raise ValueError(f"daily_threshold must be between 1 and 1000, got {value}")
+        return value
+
+    @validator("total_records")
+    def validate_total_records(cls, value):
+        if not (1e4 <= value <= 1e8):
+            raise ValueError(f"total_records must be between 10,000 and 100,000,000, got {value}")
+        return value
+
+    @validator("window")
+    def validate_window(cls, value):
+        """Validate window format and convert to timedelta."""
+        try:
+            timedelta_obj = pd.to_timedelta(value)
+            if timedelta_obj <= timedelta(0):
+                raise ValueError("Window must be a positive time interval.")
+            return value  # Keep original string format
+        except ValueError:
+            raise ValueError(f"Invalid window format: '{value}'. Use formats like '35d', '2h', '1w'.")
+
+    def get_timedelta(self) -> timedelta:
+        """Returns the window as a timedelta object."""
+        return pd.to_timedelta(self.window)
 
 
 class QuerySentimentTopic(BaseModel):
     token: Optional[str] = None
 
-    text: List
+    text: List[str]  # List of strings, each containing multiple comma-separated queries
     top_n: Optional[int] = 3
     normalize_to_global: Optional[bool] = True
     z_score: Optional[bool] = True
@@ -97,8 +57,20 @@ class QuerySentimentTopic(BaseModel):
     freq: Optional[str] = '-1h'
     languages: Optional[list] = []
     check_geoh3: Optional[bool] = False
-
+    filter_sample_daily_size: Optional[FilterSampleDailySize] = FilterSampleDailySize()
+    adjust_gap: Optional[list] = None  # dates known to contain gaps in data
+    
     live: Optional[bool] = True
     max_rows: Optional[int] = 10000
     run_async: Optional[bool] = True
     credentials: Optional[Credentials] = Credentials()
+
+    @validator("text", each_item=True)
+    def validate_text(cls, value):
+        sub_queries = [q.strip() for q in value.split(",")]
+        if len(sub_queries) > 5:
+            raise ValueError(
+                f"Each query string can contain at most 5 sub-queries, but got {len(sub_queries)}: {value}")
+        if len(sub_queries) == 0:
+            raise ValueError(f"Each query string must contain at least 1 sub-query, but got 0: {value}")
+        return value

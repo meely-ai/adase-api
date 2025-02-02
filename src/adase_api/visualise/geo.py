@@ -68,7 +68,7 @@ def plot_paths(affinity, origin=None, destination=None, n_top=30):
     fig.show()
 
 
-def plot_paths_generic(plot_df, origin=None, destination=None):
+def plot_paths_generic(plot_df, origin=None, destination=None, path_line_width=7):
     fig = go.Figure()
     for df, symbol, point_color, line_color in zip([plot_df.origin, plot_df.destination],
                                                    ['circle', 'star-square-dot'],
@@ -99,7 +99,7 @@ def plot_paths_generic(plot_df, origin=None, destination=None):
             lon=[row.origin['GPS_long'], row.destination['GPS_long']],
             lat=[row.origin['GPS_lat'], row.destination['GPS_lat']],
             mode='lines+markers',
-            line=dict(width=(0.01 + row.weight['']) * 5, color='rgb(204, 0, 0)'),
+            line=dict(width=(0.01 + row.weight['']) * path_line_width, color='rgb(204, 0, 0)'),
             opacity=0.5,  # min([float(row.weight['']) / float(plot_df.weight.max()) * .4, 1]),
             hovertext=f"{row.origin['code']}-{row.destination['code']}={round(row.weight[''], 2)}",
             hoverinfo='text'
@@ -147,6 +147,9 @@ def explore_matched_cities(matched_cities, airport, cities_admin, city_airport_f
         return data_to_plot
 
     matched_cities_geonamid = set(matched_cities.geonamid).intersection(city_airport_flow.columns)
+    if len(matched_cities_geonamid) == 0:
+        print("none of matched cities found in `city_airport_flow`")
+        return
     matched_flow = city_airport_flow[matched_cities_geonamid].dropna(axis=0, thresh=1).stack().to_frame("weight__")
 
     data_to_plot = cities_admin[['asciiname', 'GPS_lat', 'GPS_long', 'population']].join(matched_flow).rename(

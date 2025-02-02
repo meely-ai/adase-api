@@ -76,3 +76,26 @@ def load_one_mobility(text: list, credentials: Credentials, aggregated=True):
         q.tag_geo.token = auth_token
     mobility = query_api(q.dict(), AdaApiConfig.HOST_GEO, endpoint='get-mobility-by-text')
     return [process_mobility_api(one).km_min.interpolate(method='linear') for t, one in zip(text, mobility)]
+
+
+def filter_by_sample_size(sentiment, window='35d', daily_threshold=10, total_records=1e6):
+    """Replace values with NaN if rolling coverage falls below threshold."""
+    coverage_roll = sentiment.coverage.rolling(window=window).sum()
+    threshold = (daily_threshold * int(window[:-1])) / total_records
+    return sentiment.where(coverage_roll >= threshold)
+
+
+def adjust_gap(ada, change_dates=('2023-11-01',)):
+    # TODO: support adjustments on multiple shifts
+    adjusted = []
+    for en, date in enumerate(change_dates):
+        before, after = ada[ada.index < date], ada[ada.index > date]
+        scale = before.tail(365).mean() / after.mean()
+        after *= scale
+
+        if en == 0:
+            adjusted += [before]
+
+        adjusted += [after]
+
+    return pd.concat(adjusted)

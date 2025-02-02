@@ -33,6 +33,7 @@ class GeoH3Interface(BaseModel):
 class QueryMobility(BaseModel):
     geoh3_dict: Optional[dict] = {}
     aggregated: Optional[bool] = True  # if True, weighted density average across multiple geoh3
+    days_back: Optional[int] = 92
 
 
 class QueryTextDensity(BaseModel):
@@ -47,6 +48,7 @@ class QueryTextMobility(BaseModel):
     geo_h3_interface: GeoH3Interface
     mobility: QueryMobility
     credentials: Optional[Credentials] = Credentials()
+    map_geoh3_to_names: Optional[bool] = True
 
 
 class QueryStationData(BaseModel):
