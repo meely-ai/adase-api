@@ -5,6 +5,7 @@ from functools import reduce
 import pandas as pd
 from adase_api.schemas.geo import GeoH3Interface, QueryStationData, QueryTextMobility, \
     QueryTagGeo, Credentials, QueryMobility
+from adase_api.schemas.sentiment import ZScoreWindow
 from adase_api.docs.config import AdaApiConfig
 
 
@@ -86,16 +87,40 @@ def filter_by_sample_size(sentiment, window='35d', daily_threshold=10, total_rec
 
 
 def adjust_gap(ada, change_dates=('2023-11-01',)):
-    # TODO: support adjustments on multiple shifts
+    """Adjust a gap in series due to known data collection changes"""
     adjusted = []
+    prev_date = ada.index.min()  # Start from the earliest date
+
     for en, date in enumerate(change_dates):
-        before, after = ada[ada.index < date], ada[ada.index > date]
-        scale = before.tail(365).mean() / after.mean()
-        after *= scale
+        before, after = ada[(ada.index >= prev_date) & (ada.index < date)], ada[ada.index >= date]
 
-        if en == 0:
-            adjusted += [before]
+        if not before.empty and not after.empty:
+            scale = before.tail(365).mean() / after.mean()
+            after *= scale
 
-        adjusted += [after]
+        adjusted.append(before)
+        prev_date = date  # Update prev_date for next iteration
+
+    adjusted.append(after)  # Append the last segment
 
     return pd.concat(adjusted)
+
+
+def get_rolling_z_score(df, window: ZScoreWindow):
+    rolling_mean = df.rolling(window=window.window).mean()
+    rolling_std = df.rolling(window=window.window).std()
+    return (df - rolling_mean) / rolling_std
+
+
+def map_query_to_alias(ada, ada_queries, aliases):
+    """Maps query topics to their corresponding aliases in the DataFrame multiindex column names"""
+    if len(aliases) != len(ada_queries):
+        raise ValueError("Mismatch in length of aliases and search topics")
+
+    ada_query_alias_map = dict(zip(ada_queries, aliases))
+
+    mapped = ada.copy()
+    mapped.columns = pd.MultiIndex.from_tuples(
+        [(c1, ada_query_alias_map.get(c2, c2)) for c1, c2 in mapped.columns]
+    )
+    return mapped
