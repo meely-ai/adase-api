@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Optional, List, Union, Dict, Literal
+from enum import Enum
+from typing import Optional, List, Union, Dict
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
 
 
@@ -45,6 +46,12 @@ class FilterSampleDailySize(BaseModel):
 
 class ZScoreWindow(BaseModel):
     window: Optional[Union[int, pd.Timedelta, str]] = 14  # window can be int, Timedelta, or a string
+
+
+class OnNotFoundQuery(str, Enum):
+    RAISE = "raise"
+    WARN = "warn"
+    IGNORE = "ignore"
 
 
 class Subquery(BaseModel):
@@ -145,7 +152,7 @@ class QuerySentimentTopic(BaseModel):
     check_geoh3: Optional[bool] = False
 
     run_async: Optional[bool] = True  # each query in parallel
-    on_not_found_query: Optional[Literal["raise", "warn", "ignore"]] = "raise"
+    on_not_found_query: Optional[OnNotFoundQuery] = OnNotFoundQuery.RAISE
     credentials: Optional[Credentials] = Credentials()
     token: Optional[str] = None  # authorise request
 
