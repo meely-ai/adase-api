@@ -19,18 +19,18 @@ def _load_sentiment_topic_one(q: QuerySentimentTopic):
     response = requests.post(url, json=json_payload)
     if response.status_code != 200:
         msg = response.text
-        if q.on_not_found_query == 'raise':
+        if q.on_not_found_query.value == 'raise':
             raise HTTPError(msg)
-        elif q.on_not_found_query == 'warn':
+        elif q.on_not_found_query.value == 'warn':
             warnings.warn(msg)
         time.sleep(30)  # server might be temporally unavailable
         return
 
     if 'Internal Server Error' in response.text:
         msg = f"Server Error {q.text}. Try repeat query later"
-        if q.on_not_found_query == 'raise':
+        if q.on_not_found_query.value == 'raise':
             raise ValueError(msg)
-        elif q.on_not_found_query == 'warn':
+        elif q.on_not_found_query.value == 'warn':
             warnings.warn(msg)
         time.sleep(30)  # server might be temporally unavailable
         return
@@ -87,10 +87,10 @@ def check_which_query_found(one_q: QuerySentimentTopic, ada, one_ada_query, weig
     if len(ada.coverage.columns) != len(one_q.text):
         missing = set(one_q.text) - set(ada.coverage.columns)
         msg = f"Queries not found={missing}. Adjust subquery, remove it or `set on_not_found_query`='ignore'"
-        if one_q.on_not_found_query == 'raise':
+        if one_q.on_not_found_query.value == 'raise':
             raise ValueError(msg)
         else:  # filter weights that are found
-            if one_q.on_not_found_query == 'warn':
+            if one_q.on_not_found_query.value == 'warn':
                 warnings.warn(msg)
             one_q.text = [q for q in one_q.text if q in ada.score.columns]
             one_ada_query = one_ada_query.replace(','.join(missing), '').strip(', ').strip()
