@@ -1,6 +1,7 @@
 import requests, aiohttp, json, warnings, time
 from requests.exceptions import HTTPError
 from datetime import datetime
+from io import StringIO
 import pandas as pd
 from typing import Optional, List
 from scipy.stats import zscore
@@ -34,7 +35,8 @@ def _load_sentiment_topic_one(q: QuerySentimentTopic):
         time.sleep(30)  # server might be temporally unavailable
         return
 
-    df = pd.read_json(response.json())
+    json_data = StringIO(response.json())
+    df = pd.read_json(json_data)
 
     df.set_index(pd.DatetimeIndex(pd.to_datetime(df['date_time'], unit='ms'), name='date_time'), inplace=True)
     df = df.set_index(['query'], append=True).drop('date_time', axis=1
@@ -157,7 +159,7 @@ def load_sentiment_topic(q: QuerySentimentTopic):
             )
 
         lada += [ada]
-    ada = pd.concat(lada, axis=1).fillna(method='ffill')
+    ada = pd.concat(lada, axis=1).ffill()
     ada.columns.names = ['indicator', 'query']
 
     return ada
