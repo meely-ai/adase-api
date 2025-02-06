@@ -1,51 +1,104 @@
 ![logo](ADA_logo.png)
 ## ADA Sentiment Explorer API
 ### Introduction
-Alpha Data Analytics ("ADA") is a data analytics company, core product is ADA Sentiment Explorer (“ADASE”), build on an opinion monitoring technology that intelligently reads news sources and social platforms into machine-readable indicators. It is designed to provide unbiased visibility of people's opinions as a driving force of capital markets, political processes, demand prediction or marketing
+Alpha Data Analytics ("ADA") is a data analytics company, core solution is ADA Sentiment Explorer (“ADASE”), build on an sentiment monitoring technology that reads news and social platforms into machine-readable indicators. It is designed to provide visibility of opinions as a driving force behind capital markets, demand prediction, political processes or marketing
 
-ADA's vision is to democratise advanced AI-system supporting decisions, that benefit data proficient people and small- or medium- quantitative institutions.<br><br>
-ADASE supports `keyword` and `topic` engines, as explained below
+This packages is made for data proficient users, like quantitative analysts, data engineers, data scientist or analysts<br><br>
+Package is build around two search engines `keyword` and `topic`, as explained below. 
+Data contains two indicators: 
+- `score` — sentiment polarity score in the range of [-1, +1]
+- `coverage` — ratio (proportion) of query hits divided to total number of data
+  - naturally, different queries will have varying levels of popularity. To make them comparable over time, z-score normalization is recommended and supported by the package
+  - indicator shows for most of the queries a strong weekday seasonality
+  
 ### To install
 ```commandline
 pip install adase-api
 ```
+### Credentials
+In case you don't have yet the credentials, you can [Sign Up for FREE 14 day trial](https://adalytica.io/signup)
 ## Sentiment Open Query
-To use API you need to provide API credentials as environment variables and search topic
+To use API you need to provide API credentials and search terms
 ```python
 from adase_api.schemas.sentiment import Credentials, QuerySentimentTopic
 from adase_api.sentiment import load_sentiment_topic
 
 credentials = Credentials(username='youruser@gmail.com', password='yourpass')
 
-search_topics = ["inflation rates", "OPEC cartel"]
+search_terms = ["inflation rates", "bitcoin"]
 ada_query = QuerySentimentTopic(
-  text=search_topics,
+  text=search_terms,
   credentials=credentials
 )
 sentiment = load_sentiment_topic(ada_query)
-sentiment.tail(10)
+sentiment.tail(3)
 ```
 ```text
-                          score                    coverage                
-query               OPEC cartel inflation rates OPEC cartel inflation rates
-date_time                                                                  
-2024-01-12 03:00:00    0.170492       -3.210051   -0.270801        1.600013
-2024-01-12 04:00:00    0.184400       -0.621429   -0.270801        1.600013
-2024-01-12 05:00:00    0.170492        0.952482   -0.270801        0.414950
-2024-01-12 06:00:00    0.170492       -0.114074   -0.270801        0.414950
-2024-01-12 07:00:00    0.170492        0.804350   -0.270801        0.414950
-2024-01-12 08:00:00    0.170492        0.241445   -0.270801        1.600013
-2024-01-12 09:00:00    0.170492        1.548717   -0.270801        3.970140
+indicator                     score        coverage     score  coverage
+query               inflation rates inflation rates   bitcoin   bitcoin
+          date_time                                                              
+2025-02-04 06:00:00        0.112417        0.002583  0.011417  0.001750
+2025-02-04 09:00:00        0.103167        0.002750 -0.155000  0.001500
+2025-02-04 12:00:00        0.047500        0.002750 -0.050375  0.003375
 ```
-* Returns `coverage` and `score` (sentiment) to a pandas DataFrame.
-* When `normalize_to_global`=True data comes more sparse, since query hits most likely won't be found every hour. 
-* In this case missing records, both `coverage` and `score` are filled with 0's
-* `coverage` field is usually seasonal, is adviced to apply a 7-day rolling average
-* By default, is queried **live** data, that comes on an hourly basis and includes 6 months history
+Returns two indicators, `coverage` and `score`, in a Pandas DataFrame indexed by timestamp objects, with columns organized as a multiindex
+### More advanced queries
+You can supply a dictionary of query keys, each containing multiple comma-separated sentiment queries along with the corresponding weight for each subquery: 
+```python
+ASSETS = {
+    "NXPI": {
+        "queries": "(+NXPI), (+semiconduct*)",
+        "weights": [1.0, 0.5]
+    },
+    "PLTR": {
+        "queries": "(+Palantir), (+PLTR)",
+        "weights": [2.0, 1.0]
+    }
+}
 
-### Search topic syntax
+ada_query = QuerySentimentTopic.from_assets(
+    ASSETS,
+    credentials=credentials
+)
+```
+In this case, each search term is queried individually, and then a weighted average is calculated
+```text
+indicator               score  coverage     score  coverage
+query                    NXPI      NXPI      PLTR      PLTR
+          date_time                                                  
+2025-02-04 06:00:00  0.056472  0.000333 -0.010778  0.000417
+2025-02-04 09:00:00  0.051278  0.000194  0.039500  0.000417
+2025-02-04 12:00:00  0.016750  0.000042  0.058500  0.000583
+```
+<br>
+
+You can also apply z-score sentiment normalization. In this example, the z-score is calculated based on a 35-day rolling window.
+```python
+from adase_api.schemas.sentiment import ZScoreWindow
+
+ada_query = QuerySentimentTopic.from_assets(
+    ASSETS,
+    credentials=credentials,
+    z_score=ZScoreWindow(window='35d')
+)
+```
+By default is queried last 35 days of live data collection, but you can switch to historical data
+```python
+ada_query = QuerySentimentTopic.from_assets(
+    ASSETS,
+    credentials=credentials,
+    z_score=ZScoreWindow(window='365d'),
+    live=False,
+    start_date='2020-01-01',
+    languages=['de', 'ro'],
+    freq='1d',
+    on_not_found_query='warn'
+)
+```
+This query will retrieve data from 2020, in German and Romanian languages, apply a 1-year rolling z-score and return a daily data granularity
+### More about search query syntax
 1. **Plain text**
-   - In contrast with keyword search, plain text relies on topics to query data on wider concept. It works the best when 2-5 words describe some concepts, examples:
+   - Unlike keyword search, plain text relies on topics to query data based on broader concepts. It works best when 2-5 words describe a particular concept. Examples include:
      - `"stock market"`, it might also analyse terms as `"Dow Jones"`, `"FAANG"` etc.
      - `"Airline travel demand"`
      - `"Energy disruptions in Europe"`
@@ -58,48 +111,28 @@ date_time
      - `+` indicates a search term must be found
      - and `-` excludes it
    - For example `"(+Ford +Motor*)`, asterix `*` will include both `Motor` & `Motors`
-```python
-import pandas as pd
 
-search_topics = ["(+inflation)"]
-ada_query = QuerySentimentTopic(
-    text=search_topics,
-    credentials=credentials,
-    languages=['de', 'ro', 'pt', 'pl'],
-    live=False,
-    start_date=pd.to_datetime('2010-01-01')
-)
-```
 This query will do a boolean search on historical data starting from **Jan 1, 2010** and include only data in specified languages
 
-## Mobility Index
-**Monitor traffic (on the road) situation on the city-to-airport pairs**
-<br><br>
-Besides the news monitoring, the package also provides interface to query worldwide real-time traffic situation.
-This can be useful in the combination with media or standalone.   
-```python
-from adase_api.schemas.geo import QueryTagGeo, GeoH3Interface, QueryTextMobility, QueryMobility
-from adase_api.geo import load_mobility_by_text
+## Key stats
+### Data coverage, missing or insufficient data
+- Curated from over 5,000 sources
+- Approximately 1,000,000 unique stories daily
+- Available in 72 languages; both original and translated versions for querying in base English
+- To ensure sufficient data per query, you have the `filter_sample_daily_size` option (refer to the code docstring for more details). If not enough data is found, those rows will be set to NaN. The calculation uses a rolling window, meaning some periods may have sufficient data while others may not.
+- If no results are found, you’ll receive a Server HTTP 404 error. For multiple sub-queries, any missing ones will be ignored, and the results will be based on the found sub-queries.
+- For more details, refer to the code docstrings
 
-q = QueryTextMobility(
-    credentials=credentials,
-    tag_geo=QueryTagGeo(text=['Gdansk']),
-    geo_h3_interface=GeoH3Interface(),
-    mobility=QueryMobility(aggregated=True)
-)
-mobility = load_mobility_by_text(q)
-```
+### Data history
+- Data available since January 1, 2019
+### API rate limit
+All endpoints have a set limit on API calls per minute, with a default of 10 calls per minute.
 
-## API rate limit
-All endpoints have set limit on API calls per minute, by default 10 calls  / min.
-
-### In case you don't have yet the credentials, you can [sign up for free](https://adalytica.io/signup)
-- Data available since January 1, 2001
-- Easy way to explore or backtest
-- In a trial version data lags 24-hours
-- Probably something else? Hopefully the data can inspire you for other use cases
-
-You can follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/)
+### Chat with data
+You can also interact with data using LLM and integrate live news data feeds into your systems, although this is outside the scope of this particular package. 
 
 ### Questions?
-For package questions, rate limit or feedback you can reach out to info@adalytica.io
+- For package questions, rate limit or feedback you can reach out to [info@adalytica.io](mailto:info@adalytica.io)
+- You can also follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/)
+- Or check some of [our public research](https://adalytica.io/news) powered by this package data  
+- If this feels too complex, there's also a lightweight web app solution that provides access to sentiment data.

@@ -4,16 +4,16 @@ from shapely.geometry import Polygon, Point
 import geopandas as gpd
 
 
-def plot_h3_density(density):
+def plot_h3_density(density, column_to_color='density'):
     density['geometry'] = density.geoh3.map(
         lambda geoh: Polygon([t[::-1] for t in h3.h3_to_geo_boundary(geoh + 8 * 'f')]))
 
     geojson = gpd.GeoSeries(density.geometry, density.index)
 
     fig = px.choropleth_mapbox(density,
-                               geojson=geojson, locations=density.index, color="density",
+                               geojson=geojson, locations=density.index, color=column_to_color,
                                #                            color_continuous_scale="spectral",
-                               range_color=(0.1, 1),
+                               range_color=(density[column_to_color].min(), density[column_to_color].max()),
                                mapbox_style="carto-positron",
                                zoom=1, center={"lat": 37.0902, "lon": -95.7129},
                                opacity=0.4

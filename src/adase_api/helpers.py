@@ -5,6 +5,7 @@ from functools import reduce
 import pandas as pd
 from adase_api.schemas.geo import GeoH3Interface, QueryStationData, QueryTextMobility, \
     QueryTagGeo, Credentials, QueryMobility
+from adase_api.schemas.sentiment import ZScoreWindow
 from adase_api.docs.config import AdaApiConfig
 
 
@@ -76,3 +77,50 @@ def load_one_mobility(text: list, credentials: Credentials, aggregated=True):
         q.tag_geo.token = auth_token
     mobility = query_api(q.dict(), AdaApiConfig.HOST_GEO, endpoint='get-mobility-by-text')
     return [process_mobility_api(one).km_min.interpolate(method='linear') for t, one in zip(text, mobility)]
+
+
+def filter_by_sample_size(sentiment, window='35d', daily_threshold=10, total_records=1e6):
+    """Replace values with NaN if rolling coverage falls below threshold."""
+    coverage_roll = sentiment.coverage.rolling(window=window).sum()
+    threshold = (daily_threshold * int(window[:-1])) / total_records
+    return sentiment.where(coverage_roll >= threshold)
+
+
+def adjust_gap(ada, change_dates=('2023-11-01',)):
+    """Adjust a gap in series due to known data collection changes"""
+    adjusted = []
+    prev_date = ada.index.min()  # Start from the earliest date
+
+    for en, date in enumerate(change_dates):
+        before, after = ada[(ada.index >= prev_date) & (ada.index < date)], ada[ada.index >= date]
+
+        if not before.empty and not after.empty:
+            scale = before.tail(365).mean() / after.mean()
+            after *= scale
+
+        adjusted.append(before)
+        prev_date = date  # Update prev_date for next iteration
+
+    adjusted.append(after)  # Append the last segment
+
+    return pd.concat(adjusted)
+
+
+def get_rolling_z_score(df, window: ZScoreWindow):
+    rolling_mean = df.rolling(window=window.window).mean()
+    rolling_std = df.rolling(window=window.window).std()
+    return (df - rolling_mean) / rolling_std
+
+
+def map_query_to_alias(ada, ada_queries, aliases):
+    """Maps query topics to their corresponding aliases in the DataFrame multiindex column names"""
+    if len(aliases) != len(ada_queries):
+        raise ValueError("Mismatch in length of aliases and search topics")
+
+    ada_query_alias_map = dict(zip(ada_queries, aliases))
+
+    mapped = ada.copy()
+    mapped.columns = pd.MultiIndex.from_tuples(
+        [(c1, ada_query_alias_map.get(c2, c2)) for c1, c2 in mapped.columns]
+    )
+    return mapped

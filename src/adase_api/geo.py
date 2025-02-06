@@ -9,15 +9,18 @@ from adase_api.docs.config import AdaApiConfig, GeoH3Config
 from adase_api.helpers import auth
 
 
-def process_mobility_api(resp_content):
+def process_mobility_api(resp_content, geoh3_columns=None, aggregated=True):
     """Parse /get-mobility response content to pandas.DataFrame"""
     many = []
-    for one in resp_content:
-        many += [pd.DataFrame(json.loads(one)).rename(columns={'0': 'km_min'})]
+    for q, one in zip(geoh3_columns, resp_content):
+        frame = pd.DataFrame(json.loads(one)).rename(columns={'0': 'km_min'})
+        if aggregated:
+            frame['geoh3'] = q
+        many += [frame]
     mobility_index = pd.concat(many)
     mobility_index.date_time = mobility_index.date_time.astype(str).map(
         lambda dt: datetime.utcfromtimestamp(int(dt[:-3])))
-    return mobility_index.set_index(['date_time', 'geoh3']).unstack('geoh3')
+    return mobility_index.groupby(['date_time', 'geoh3']).mean().unstack('geoh3')
 
 
 def decode_geoh3(df, token, min_density=0.03):
@@ -38,10 +41,11 @@ def load_mobility_by_text(q: QueryTextMobility):
         auth_token = auth(q.credentials.username, q.credentials.password)
         q.token = auth_token
     mobility = query_api(q.dict(), AdaApiConfig.HOST_GEO, endpoint='get-mobility-by-text')
-    mobility = process_mobility_api(mobility).km_min.interpolate(method='linear')
+    mobility = process_mobility_api(mobility, geoh3_columns=q.tag_geo.text, aggregated=q.mobility.aggregated
+                                    ).km_min.interpolate(method='linear')
     if q.mobility.aggregated:
         mobility.columns = q.tag_geo.text
-    else:
+    elif q.map_geoh3_to_names:
         mobility = decode_geoh3(mobility, q.token)
     return mobility
 
