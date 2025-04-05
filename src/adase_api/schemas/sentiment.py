@@ -196,9 +196,9 @@ class QuerySentimentTopic(BaseModel):
             # Convert freq string to Timedelta object
             delta = pd.to_timedelta(value)
 
-            # Check if it's a negative value and less than -30 minutes
-            if delta < timedelta(minutes=30):
-                raise ValueError(f"Frequency must be a value less than 30 minutes, got '{value}'.")
+            # Check if it's less than 15 minutes
+            if delta <= timedelta(minutes=15):
+                raise ValueError(f"Frequency must be a value greater than 15 minutes, got '{value}'.")
 
         except ValueError:
             raise ValueError(f"Invalid frequency format: '{value}'. Must be a valid timedelta format.")
