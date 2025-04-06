@@ -1,7 +1,11 @@
-![logo](ADA_logo.png)
-## ADA Sentiment Explorer API
+![logo](https://storage.googleapis.com/adalytica-webpage-assets/article-images/Color_black_horizontal.png)
+## Adalytica Sentiment Explorer API
 ### Introduction
-Alpha Data Analytics ("ADA") is a data analytics company, core solution is ADA Sentiment Explorer (“ADASE”), build on an sentiment monitoring technology that reads news and social platforms into machine-readable indicators. It is designed to provide visibility of opinions as a driving force behind capital markets, demand prediction, political processes or marketing
+Alpha Data Analytics ("Adalytica") is a data analytics company specializing in sentiment analysis. Its core product, Sentiment Explorer, uses sentiment monitoring technology to analyze news and social media content, transforming it into machine-readable data. The platform provides insights into public sentiment that can be applied across various fields, including capital markets, demand forecasting, political analysis, marketing strategies, and more.
+<br>
+This package powers the [Fear and Greed Index](https://adalytica.io/stock-fear-and-greed-index), a key tool for assessing market sentiment.
+<br>
+For a detailed explanation of how it works, read the article: [How Fear and Greed Using Sentiment AI Works?](https://adalytica.io/news/how-fear-and-greed-sentiment-using-ai-works)
 
 This packages is made for data proficient users, like quantitative analysts, data engineers, data scientist or analysts<br><br>
 Package is build around two search engines `keyword` and `topic`, as explained below. 
@@ -16,7 +20,7 @@ Data contains two indicators:
 pip install adase-api
 ```
 ### Credentials
-In case you don't have yet the credentials, you can [Sign Up for FREE 14 day trial](https://adalytica.io/signup)
+In case you don't have yet the credentials, you can [Sign Up for free 14 day trial](https://adalytica.io/signup)
 ## Sentiment Open Query
 To use API you need to provide API credentials and search terms
 ```python
