@@ -39,6 +39,8 @@ def _load_sentiment_topic_one(q: QuerySentimentTopic):
     df = pd.read_json(json_data)
 
     df.set_index(pd.DatetimeIndex(pd.to_datetime(df['date_time'], unit='ms'), name='date_time'), inplace=True)
+    if q.keep_no_hits_rows:
+        df['query'].ffill(inplace=True)  # retain rows with no hits (date time & NaN)
     df = df.set_index(['query'], append=True).drop('date_time', axis=1
                                                    ).groupby(['date_time', 'query']).first().unstack('query')
     return df

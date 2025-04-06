@@ -146,7 +146,7 @@ class QuerySentimentTopic(BaseModel):
     normalize_score_to_global: Optional[bool] = True
     min_global_row_count: Optional[int] = 100  # min no. of global rows to estimate a chart, and what about emerging?
     max_rows: Optional[int] = 10000  # random down-sample
-
+    keep_no_hits_rows: Optional[bool] = False  # keep or remove rows with no hits
     adjust_gap: Optional[Union[List[str], None]] = None  # dates (as string) known to contain gaps in data
     languages: Optional[list] = []  # TODO: add coverage regions
     check_geoh3: Optional[bool] = False
@@ -197,7 +197,7 @@ class QuerySentimentTopic(BaseModel):
             delta = pd.to_timedelta(value)
 
             # Check if it's less than 15 minutes
-            if delta <= timedelta(minutes=15):
+            if delta < timedelta(minutes=15):
                 raise ValueError(f"Frequency must be a value greater than 15 minutes, got '{value}'.")
 
         except ValueError:
