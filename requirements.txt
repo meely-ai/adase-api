@@ -6,3 +6,4 @@ scipy>=1.7.1
 aiohttp-retry==2.8.3
 pydantic>=1.9.0,<=1.10.21
 plotly>=5.10.0
+loguru==0.7.3

@@ -3,7 +3,7 @@ import os
 
 class AdaApiConfig:
     AUTH_HOST = os.environ.get('AUTH_API_HOST', "https://adalytica.com/user-identity/auth")
-    HOST_TOPIC = os.environ.get('ADA_API_TOPIC_HOST', "https://adase-topic-zyz3xdv42q-lm.a.run.app")
+    HOST_TOPIC = os.environ.get('ADA_API_TOPIC_HOST', "http://airflow.adalytica.com")
     HOST_GEO = os.environ.get('ADA_API_TOPIC_HOST', "https://geo.adalytica.com")
     PORT = os.environ.get('ADA_API_PORT', None)
     USERNAME = os.environ.get('ADA_API_USERNAME', "")
