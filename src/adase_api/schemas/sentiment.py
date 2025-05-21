@@ -149,7 +149,8 @@ class QuerySentimentTopic(BaseModel):
     keep_no_hits_rows: Optional[bool] = False  # keep or remove rows with no hits
     adjust_gap: Optional[Union[List[str], None]] = None  # dates (as string) known to contain gaps in data
     languages: Optional[list] = []  # TODO: add coverage regions
-    check_geoh3: Optional[bool] = False
+    extra_wait_time_pct: Optional[float] = 0.2
+    wait_for_all: Optional[bool] = False
 
     run_async: Optional[bool] = True  # each query in parallel
     on_not_found_query: Optional[OnNotFoundQuery] = OnNotFoundQuery.RAISE
@@ -288,6 +289,21 @@ class QuerySentimentTopic(BaseModel):
 
         if query_aliases is None:
             values['query_aliases'] = text
+        return values
+
+    @root_validator(pre=True)
+    def validate_wait_for_all_and_extra_wait_time(cls, values):
+        """
+        Validates the relationship between `wait_for_all` and `extra_wait_time_pct`:
+        1. If `wait_for_all` is True, `extra_wait_time_pct` must not be provided.
+        2. If `extra_wait_time_pct` is provided, `wait_for_all` must be False.
+        """
+        wait_for_all = values.get('wait_for_all', False)
+        extra_wait_time_pct = values.get('extra_wait_time_pct', None)
+
+        if wait_for_all and extra_wait_time_pct is not None:
+            raise ValueError("If `wait_for_all` is True, `extra_wait_time_pct` cannot be provided.")
+
         return values
 
     @classmethod

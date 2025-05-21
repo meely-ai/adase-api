@@ -1,5 +1,8 @@
-import requests, aiohttp, json, warnings, time
-from requests.exceptions import HTTPError
+import requests
+import aiohttp
+import json
+import warnings
+import time
 from datetime import datetime
 from io import StringIO
 import pandas as pd
@@ -8,6 +11,7 @@ from scipy.stats import zscore
 from adase_api.docs.config import AdaApiConfig
 from adase_api.helpers import auth, filter_by_sample_size, adjust_gap, get_rolling_z_score
 from adase_api.schemas.sentiment import QuerySentimentTopic, ZScoreWindow
+from loguru import logger
 
 
 def _load_sentiment_topic_one(q: QuerySentimentTopic):
@@ -16,23 +20,26 @@ def _load_sentiment_topic_one(q: QuerySentimentTopic):
         q.token = auth_token
     url = f'{AdaApiConfig.HOST_TOPIC}/topic-stats/{q.token}'
     json_payload = {k: v for k, v in json.loads(q.json()).items() if k != 'z_score'}
-    response = requests.post(url, json=json_payload)
-    if response.status_code != 200:
-        msg = response.text
+    try:
+        response = requests.post(url, json=json_payload)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Request failed: {e}")
         if q.on_not_found_query.value == 'raise':
-            raise HTTPError(msg)
+            raise e
         elif q.on_not_found_query.value == 'warn':
-            warnings.warn(msg)
-        time.sleep(30)  # server might be temporally unavailable
+            warnings.warn(str(e))
+        time.sleep(30)
         return
 
     if 'Internal Server Error' in response.text:
-        msg = f"Server Error {q.text}. Try repeat query later"
+        msg = f"Server Error: {q.text}. Try repeating the query later"
+        logger.error(msg)
         if q.on_not_found_query.value == 'raise':
             raise ValueError(msg)
         elif q.on_not_found_query.value == 'warn':
             warnings.warn(msg)
-        time.sleep(30)  # server might be temporally unavailable
+        time.sleep(30)
         return
 
     json_data = StringIO(response.json())
@@ -40,9 +47,11 @@ def _load_sentiment_topic_one(q: QuerySentimentTopic):
 
     df.set_index(pd.DatetimeIndex(pd.to_datetime(df['date_time'], unit='ms'), name='date_time'), inplace=True)
     if q.keep_no_hits_rows:
-        df['query'].ffill(inplace=True)  # retain rows with no hits (date time & NaN)
-    df = df.set_index(['query'], append=True).drop('date_time', axis=1
-                                                   ).groupby(['date_time', 'query']).first().unstack('query')
+        df['query'].ffill(inplace=True)
+    df = df.set_index(['query'], append=True).drop('date_time', axis=1).groupby(['date_time', 'query']).first().unstack(
+        'query')
+
+    logger.info(f"Loaded sentiment data for query: {q.text}")
     return df
 
 
@@ -59,28 +68,28 @@ def average_text_bool_results(ada, search_topic, weights: Optional[List[float]] 
     - A DataFrame with the weighted average results.
     """
     if len(weights) == 1:
-        ada_tmp_ = ada.xs(search_topic, level=1, axis=1)
+        try:
+            ada_tmp_ = ada.xs(search_topic, level=1, axis=1)
+        except KeyError:
+            logger.warning(f"Search topic '{search_topic}' not found in data.")
+            return
         ada_tmp_.columns = pd.MultiIndex.from_tuples([[c, search_topic] for c in ada_tmp_.columns])
         return ada_tmp_
 
-    # If no weights are provided, use equal weighting (1 for each row)
     if weights is None:
-        weights = [1] * len(ada.score)  # Equal weights if no specific weights provided
-    # Normalize weights to ensure they sum to 1 (optional but commonly done in weighted averaging)
+        weights = [1] * len(ada.score)
+
     weight_sum = sum(weights)
     normalized_weights = [w / weight_sum for w in weights]
 
-    # Calculate weighted averages for score and coverage
     weighted_score = (ada.score * normalized_weights).sum(axis=1)
     weighted_coverage = (ada.coverage * normalized_weights).sum(axis=1)
 
-    # Combine weighted averages into a DataFrame
     ada_tmp_ = pd.DataFrame({
         'score': weighted_score,
         'coverage': weighted_coverage
     })
 
-    # Join with search_topic for column naming
     ada_tmp_.columns = pd.MultiIndex.from_tuples([[c, search_topic] for c in ada_tmp_.columns])
     return ada_tmp_
 
@@ -89,11 +98,10 @@ def check_which_query_found(one_q: QuerySentimentTopic, ada, one_ada_query, weig
     if len(ada.coverage.columns) != len(one_q.text):
         missing = set(one_q.text) - set(ada.coverage.columns)
         msg = f"Queries not found={missing}. Adjust subquery, remove it or `set on_not_found_query`='ignore'"
+        logger.warning(msg)
         if one_q.on_not_found_query.value == 'raise':
             raise ValueError(msg)
-        else:  # filter weights that are found
-            if one_q.on_not_found_query.value == 'warn':
-                warnings.warn(msg)
+        else:
             one_q.text = [q for q in one_q.text if q in ada.score.columns]
             one_ada_query = one_ada_query.replace(','.join(missing), '').strip(', ').strip()
             weights = [w for q, w in zip(one_q.text, weights) if q in ada.score.columns]
@@ -108,29 +116,11 @@ def load_sentiment_topic(q: QuerySentimentTopic):
     -----------
     q : QuerySentimentTopic
         An instance containing the parameters for the API query.
-            from adase_api.schemas.sentiment import QuerySentimentTopic
-    Process:
-    --------
-    - Splits the `text` query strings into individual sub-queries.
-    - Applies filters, adjustments, and normalization (e.g., Z-scores) based on the provided parameters.
-    - Optionally adjusts for gaps in data and applies daily sample size filtering.
 
     Returns:
     --------
     pd.DataFrame
         A DataFrame containing the sentiment topic data, with applied filters and normalization.
-
-    Example:
-    --------
-    - Input:
-        q = QuerySentimentTopic(
-            text=["(+Bitcoin -Luna) OR (+ETH)", "(+crypto)"],
-            credentials=credentials,
-            start_date="2025-01-01"
-            z_score='35d'
-        )
-    - Output:
-        A DataFrame with sentiment data, adjusted for gaps and normalized with Z-scores.
     """
     lada = []
     many_ada_queries = q.text
@@ -153,16 +143,19 @@ def load_sentiment_topic(q: QuerySentimentTopic):
                 ada = zscore(ada)
 
         dt = datetime.utcnow().strftime('%H:%M:%S')
-        print(f"[{dt}] | {en}/{len(q.text)} | {one_ada_query} | rows={len(ada)}")
+        logger.info(f"[{dt}] | Query {en + 1}/{len(q.text)} | {one_ada_query} | Rows={len(ada)}")
         ada = average_text_bool_results(ada, one_ada_query, weights)
-        if q.query_aliases:
+        if ada is None:
+            logger.warning(f'Query not found: {one_ada_query}')
+        elif q.query_aliases:
             ada.columns = pd.MultiIndex.from_tuples(
                 [(c1, ada.get(c2, alias)) for c1, c2 in ada.columns]
             )
 
         lada += [ada]
+
     ada = pd.concat(lada, axis=1).ffill()
     ada.columns.names = ['indicator', 'query']
 
+    logger.info(f"Successfully loaded sentiment data for {len(lada)} queries.")
     return ada
-

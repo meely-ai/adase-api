@@ -16,7 +16,7 @@ __pycache__/git status
 
 #PyCharm
 .idea/
-
+test.py
 
 # Distribution / packaging
 .Python
