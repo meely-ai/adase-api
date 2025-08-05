@@ -50,7 +50,6 @@ def _load_sentiment_topic_one(q: QuerySentimentTopic):
         df['query'].ffill(inplace=True)
     df = df.set_index(['query'], append=True).drop('date_time', axis=1).groupby(['date_time', 'query']).first().unstack(
         'query')
-
     logger.info(f"Loaded sentiment data for query: {q.text}")
     return df
 
@@ -133,9 +132,10 @@ def load_sentiment_topic(q: QuerySentimentTopic):
             continue
         ada = filter_by_sample_size(ada, **q.filter_sample_daily_size.dict())
         one_ada_query, weights = check_which_query_found(one_q, ada, one_ada_query, weights)
-
         if q.adjust_gap:
+            print(q.adjust_gap)
             ada = adjust_gap(ada)
+
         if q.z_score:
             if isinstance(q.z_score, ZScoreWindow):
                 ada = get_rolling_z_score(ada, q.z_score)
@@ -144,6 +144,7 @@ def load_sentiment_topic(q: QuerySentimentTopic):
 
         dt = datetime.utcnow().strftime('%H:%M:%S')
         logger.info(f"[{dt}] | Query {en + 1}/{len(q.text)} | {one_ada_query} | Rows={len(ada)}")
+
         ada = average_text_bool_results(ada, one_ada_query, weights)
         if ada is None:
             logger.warning(f'Query not found: {one_ada_query}')

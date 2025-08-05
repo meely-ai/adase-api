@@ -226,7 +226,7 @@ class QuerySentimentTopic(BaseModel):
         live = values.get('live', True)
 
         # If live is False, set adjust_gap to [['2023-11-01']], else set it to None
-        if not live:
+        if not live and values['adjust_gap'] is None:
             values['adjust_gap'] = ['2023-11-01']
         else:
             values['adjust_gap'] = None

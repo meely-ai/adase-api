@@ -3,9 +3,9 @@
 ### Introduction
 Alpha Data Analytics ("Adalytica") is a data analytics company specializing in sentiment analysis. Its core product, Sentiment Explorer, uses sentiment monitoring technology to analyze news and social media content, transforming it into machine-readable data. The platform provides insights into public sentiment that can be applied across various fields, including capital markets, demand forecasting, political analysis, marketing strategies, and more.
 <br>
-This package powers the [Fear and Greed Index](https://adalytica.io/stock-fear-and-greed-index), a key tool for assessing market sentiment.
+This package powers the [Fear and Greed Index](https://adalytica.com/stock-fear-and-greed-index), a key tool for assessing market sentiment.
 <br>
-For a detailed explanation of how it works, read the article: [How Fear and Greed Using Sentiment AI Works?](https://adalytica.io/news/how-fear-and-greed-sentiment-using-ai-works)
+For a detailed explanation of how it works, read the article: [How Fear and Greed Using Sentiment AI Works?](https://adalytica.com/news/how-fear-and-greed-sentiment-using-ai-works)
 
 This packages is made for data proficient users, like quantitative analysts, data engineers, data scientist or analysts<br><br>
 Package is build around two search engines `keyword` and `topic`, as explained below. 
@@ -20,7 +20,7 @@ Data contains two indicators:
 pip install adase-api
 ```
 ### Credentials
-In case you don't have yet the credentials, you can [Sign Up for free 14 day trial](https://adalytica.io/signup)
+In case you don't have yet the credentials, you can [Sign Up for free 14 day trial](https://adalytica.com/signup)
 ## Sentiment Open Query
 To use API you need to provide API credentials and search terms
 ```python
@@ -136,7 +136,7 @@ All endpoints have a set limit on API calls per minute, with a default of 10 cal
 You can also interact with data using LLM and integrate live news data feeds into your systems, although this is outside the scope of this particular package. 
 
 ### Questions?
-- For package questions, rate limit or feedback you can reach out to [info@adalytica.io](mailto:info@adalytica.io)
+- For package questions, rate limit or feedback you can reach out to [info@adalytica.com](mailto:info@adalytica.com)
 - You can also follow us on [LinkedIn](https://www.linkedin.com/company/alpha-data-analytics/)
-- Or check some of [our public research](https://adalytica.io/news) powered by this package data  
+- Or check some of [our public research](https://adalytica.com/news) powered by this package data  
 - If this feels too complex, there's also a lightweight web app solution that provides access to sentiment data.
